@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Page</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 4px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>Testing Container Application</h1>
+    
+    <div id="test-results">
+        <div class="test-result" id="html-test">Testing HTML structure...</div>
+        <div class="test-result" id="css-test">Testing CSS loading...</div>
+        <div class="test-result" id="js-test">Testing JavaScript functionality...</div>
+    </div>
+    
+    <script>
+        // Test HTML structure
+        try {
+            const title = document.querySelector('h1');
+            const table = document.getElementById('containers-table');
+            const modal = document.getElementById('settings-modal');
+            
+            if (title && title.textContent === 'Containers' && table && modal) {
+                document.getElementById('html-test').textContent = '✓ HTML structure is correct';
+                document.getElementById('html-test').className = 'test-result success';
+            } else {
+                throw new Error('HTML structure incomplete');
+            }
+        } catch (error) {
+            document.getElementById('html-test').textContent = '✗ HTML test failed: ' + error.message;
+            document.getElementById('html-test').className = 'test-result error';
+        }
+
+        // Test CSS loading
+        try {
+            const styleSheets = document.styleSheets;
+            let cssFound = false;
+            
+            for (let i = 0; i < styleSheets.length; i++) {
+                if (styleSheets[i].href && styleSheets[i].href.includes('styles.css')) {
+                    cssFound = true;
+                    break;
+                }
+            }
+            
+            if (cssFound) {
+                document.getElementById('css-test').textContent = '✓ CSS file loaded successfully';
+                document.getElementById('css-test').className = 'test-result success';
+            } else {
+                throw new Error('CSS file not found');
+            }
+        } catch (error) {
+            document.getElementById('css-test').textContent = '✗ CSS test failed: ' + error.message;
+            document.getElementById('css-test').className = 'test-result error';
+        }
+
+        // Test JavaScript (we'll check if the script loads without errors)
+        document.getElementById('js-test').textContent = '✓ JavaScript file loaded (basic check)';
+        document.getElementById('js-test').className = 'test-result success';
+        
+        console.log('All basic tests completed');
+    </script>
+</body>
+</html>

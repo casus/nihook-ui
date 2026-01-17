@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Container Manager</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-container">
+            <h1>Container Manager</h1>
+            <div class="auth-info" id="auth-info">
+                <span id="username-display"></span>
+                <button id="logout-btn" class="logout-btn">Logout</button>
+            </div>
+        </div>
+    </nav>
+    <div class="main-content">
+        <div class="table-container">
+            <h2>Your Containers</h2>
+            <button id="create-container-btn" class="create-btn">Create New Container</button>
+            <table id="containers-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Settings</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Rows will be added by TypeScript -->
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Container Settings</h2>
+            <form id="settings-form">
+                <div class="form-group">
+                    <label for="container-title">Name:</label>
+                    <input type="text" id="container-title" name="title" required>
+                </div>
+                <div class="form-group">
+                    <label for="container-description">Description:</label>
+                    <textarea id="container-description" name="description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="container-image">Image:</label>
+                    <input type="text" id="container-image" name="image" value="alpine" required>
+                </div>
+                <div class="form-group">
+                    <label for="container-ports">Ports (comma separated):</label>
+                    <input type="text" id="container-ports" name="ports" placeholder="e.g., 8080:80, 443:443">
+                </div>
+                <div class="form-group">
+                    <label for="container-volumes">Volumes (comma separated):</label>
+                    <input type="text" id="container-volumes" name="volumes" placeholder="e.g., /host:/container, /data:/app/data">
+                </div>
+                <div class="form-group">
+                    <label>Environment Variables:</label>
+                    <div id="environment-variables" class="environment-variables">
+                        <!-- Environment variables will be added here -->
+                    </div>
+                    <button type="button" id="add-env-btn" class="add-env-btn">Add Variable</button>
+                </div>
+                <button type="submit">Save</button>
+            </form>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+    <script>
+        // Check authentication status on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const token = localStorage.getItem('access_token');
+            const username = localStorage.getItem('username');
+            
+            if (!token) {
+                // Redirect to login if not authenticated
+                window.location.href = '/login';
+                return;
+            }
+            
+            // Show username and logout button
+            document.getElementById('username-display').textContent = `Logged in as: ${username}`;
+            
+            // Set up logout button
+            document.getElementById('logout-btn').addEventListener('click', async function() {
+                try {
+                    const response = await fetch('/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        // Clear local storage and redirect
+                        localStorage.removeItem('access_token');
+                        localStorage.removeItem('user_id');
+                        localStorage.removeItem('username');
+                        window.location.href = '/login';
+                    }
+                } catch (error) {
+                    console.error('Logout error:', error);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

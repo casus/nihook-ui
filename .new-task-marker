@@ -1,0 +1,3 @@
+# This marker signals that the workspace should be reset to the latest remote HEAD.
+# It is created by 'luskctl task new' and removed by init-ssh-and-repo.sh after reset.
+# If you see this file in an initialized workspace, something went wrong.
