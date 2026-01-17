@@ -82,7 +82,11 @@ container-manager/
 
 4. **Compile TypeScript**
    ```bash
-   npx tsc frontend/app.ts --target es6 --lib es2017,dom --outDir frontend
+   # Install dependencies (first time)
+   npm install
+   
+   # One-time build
+   npm run build
    ```
 
 5. **Run the application**
@@ -123,6 +127,15 @@ DATABASE_URL=sqlite:///containers.db
 You can use either:
 - **Password authentication**: Set `SSH_PASSWORD` and leave `SSH_KEY_FILE` empty
 - **Key-based authentication**: Set `SSH_KEY_FILE` to your private key path and leave `SSH_PASSWORD` empty
+
+### Automatic javascript build (debugging only):
+```bash
+# Install dependencies (first time)
+npm install
+
+# Watch and auto-compile on save
+npm run watch
+```
 
 ## Usage
 
@@ -183,7 +196,11 @@ When creating or editing a container, you can specify:
 ### Compiling TypeScript
 
 ```bash
-npx tsc frontend/app.ts --target es6 --lib es2017,dom --outDir frontend
+# One-time build
+npm run build
+
+# Or run in watch mode for auto-compilation
+npm run watch
 ```
 
 ### Running in Development

@@ -352,3 +352,62 @@ button[type="submit"]:hover {
 .status-exited {
     background-color: #9E9E9E;
 }
+
+/* Toast notifications */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 9999;
+}
+
+.toast {
+    min-width: 280px;
+    max-width: 380px;
+    background: #fff;
+    border-left: 4px solid;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: start;
+    animation: toast-enter 0.2s ease-out;
+}
+
+.toast-message {
+    color: #333;
+    font-size: 14px;
+    line-height: 1.4;
+    margin-right: 10px;
+}
+
+.toast-close {
+    background: transparent;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 4px;
+}
+
+.toast-close:hover {
+    color: #000;
+}
+
+.toast-success { border-color: #4CAF50; }
+.toast-error { border-color: #F44336; }
+.toast-info { border-color: #2196F3; }
+
+@keyframes toast-enter {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toast-exit {
+    to { opacity: 0; transform: translateY(-6px); }
+}

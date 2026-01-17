@@ -4,10 +4,6 @@ interface Container {
     name: string;
     status: string;
     description: string;
-    image: string;
-    ports: string[];
-    volumes: string[];
-    environment: Record<string, string>;
 }
 
 // API Response interfaces
@@ -35,6 +31,54 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeBtn = document.querySelector('.close') as HTMLSpanElement;
     const settingsForm = document.getElementById('settings-form') as HTMLFormElement;
     const createContainerBtn = document.getElementById('create-container-btn') as HTMLButtonElement;
+    
+    type ToastType = 'success' | 'error' | 'info';
+    
+    function getToastContainer(): HTMLDivElement {
+        let container = document.getElementById('toast-container') as HTMLDivElement | null;
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            container.className = 'toast-container';
+            document.body.appendChild(container);
+        }
+        return container;
+    }
+    
+    function showToast(message: string, type: ToastType = 'info', duration = 4000): void {
+        const container = getToastContainer();
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.setAttribute('role', 'status');
+        toast.setAttribute('aria-live', 'polite');
+        
+        const msg = document.createElement('div');
+        msg.className = 'toast-message';
+        msg.textContent = message;
+        
+        const close = document.createElement('button');
+        close.className = 'toast-close';
+        close.type = 'button';
+        close.textContent = '×';
+        
+        function removeToast() {
+            toast.style.animation = 'toast-exit 0.18s ease-in forwards';
+            toast.addEventListener('animationend', () => {
+                if (toast.parentElement === container) {
+                    container.removeChild(toast);
+                }
+            }, { once: true });
+        }
+        
+        close.addEventListener('click', removeToast);
+        toast.appendChild(msg);
+        toast.appendChild(close);
+        container.appendChild(toast);
+        
+        if (duration > 0) {
+            setTimeout(removeToast, duration);
+        }
+    }
     
     // Helper function to get auth token
     function getAuthToken(): string | null {
@@ -73,10 +117,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.removeItem('user_id');
                     localStorage.removeItem('username');
                     window.location.href = '/login';
+                    return { error: 'Session expired. Please log in again.' };
                 }
                 
-                const errorData = await response.json();
-                return { error: errorData.error || 'API request failed' };
+                try {
+                    const errorData = await response.json();
+                    console.error(`${response.status} Error from ${endpoint}:`, errorData);
+                    return { error: errorData.error || errorData.message || `API request failed (${response.status})` };
+                } catch {
+                    const text = await response.text();
+                    console.error(`${response.status} Error from ${endpoint}:`, text);
+                    return { error: `API request failed (${response.status}): ${text}` };
+                }
             }
             
             return await response.json();
@@ -94,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const response = await apiCall<Container[]>('/api/containers');
         
         if (response.error) {
-            alert(response.error);
+            showToast(response.error, 'error');
         } else if (response && Array.isArray(response)) {
             containers = response;
         }
@@ -202,9 +254,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const response = await apiCall(endpoint, 'POST');
         
         if (response.error) {
-            alert(response.error);
+            showToast(response.error, 'error');
         } else {
-            alert(response.message || `${action.charAt(0).toUpperCase() + action.slice(1)} successful`);
+            const msg = (response as ApiResponse<unknown>).message || `${action.charAt(0).toUpperCase() + action.slice(1)} successful`;
+            showToast(String(msg), 'success');
             await fetchContainers();
         }
     }
@@ -218,21 +271,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Set form values
         (document.getElementById('container-title') as HTMLInputElement).value = container.name;
         (document.getElementById('container-description') as HTMLTextAreaElement).value = container.description || '';
-        (document.getElementById('container-image') as HTMLInputElement).value = container.image || 'alpine';
-        (document.getElementById('container-ports') as HTMLInputElement).value = container.ports?.join(', ') || '';
-        (document.getElementById('container-volumes') as HTMLInputElement).value = container.volumes?.join(', ') || '';
         
         // Set environment variables
         const envContainer = document.getElementById('environment-variables') as HTMLDivElement;
         envContainer.innerHTML = '';
-        
-        if (container.environment && Object.keys(container.environment).length > 0) {
-            for (const [key, value] of Object.entries(container.environment)) {
-                addEnvironmentVariable(key, value);
-            }
-        } else {
-            addEnvironmentVariable('', '');
-        }
 
         modal.style.display = 'block';
     }
@@ -270,32 +312,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const name = (document.getElementById('container-title') as HTMLInputElement).value;
         const description = (document.getElementById('container-description') as HTMLTextAreaElement).value;
-        const image = (document.getElementById('container-image') as HTMLInputElement).value;
-        const portsInput = (document.getElementById('container-ports') as HTMLInputElement).value;
-        const volumesInput = (document.getElementById('container-volumes') as HTMLInputElement).value;
-        
-        // Parse ports and volumes
-        const ports = portsInput.split(',').map(p => p.trim()).filter(p => p);
-        const volumes = volumesInput.split(',').map(v => v.trim()).filter(v => v);
         
         // Parse environment variables
-        const envRows = document.querySelectorAll('.env-row');
-        const environment: Record<string, string> = {};
-        envRows.forEach(row => {
-            const key = (row.querySelector('.env-key') as HTMLInputElement).value.trim();
-            const value = (row.querySelector('.env-value') as HTMLInputElement).value.trim();
-            if (key) {
-                environment[key] = value;
-            }
-        });
         
         const containerData = {
             name,
             description,
-            image,
-            ports,
-            volumes,
-            environment
         };
         
         if (currentContainer) {
@@ -303,9 +325,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await apiCall(`/api/containers/${currentContainer.id}`, 'PUT', containerData);
             
             if (response.error) {
-                alert(response.error);
+                showToast(response.error, 'error');
             } else {
-                alert('Container updated successfully');
+                showToast('Container updated successfully', 'success');
                 await fetchContainers();
                 closeModal();
             }
@@ -314,9 +336,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await apiCall('/api/containers', 'POST', containerData);
             
             if (response.error) {
-                alert(response.error);
+                showToast(response.error, 'error');
             } else {
-                alert('Container created successfully');
+                showToast('Container created successfully', 'success');
                 await fetchContainers();
                 closeModal();
             }
@@ -335,14 +357,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset form
         (document.getElementById('container-title') as HTMLInputElement).value = '';
         (document.getElementById('container-description') as HTMLTextAreaElement).value = '';
-        (document.getElementById('container-image') as HTMLInputElement).value = 'alpine';
-        (document.getElementById('container-ports') as HTMLInputElement).value = '';
-        (document.getElementById('container-volumes') as HTMLInputElement).value = '';
-        
-        // Reset environment variables
-        const envContainer = document.getElementById('environment-variables') as HTMLDivElement;
-        envContainer.innerHTML = '';
-        addEnvironmentVariable();
         
         // Show modal
         modal.style.display = 'block';
@@ -360,5 +374,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Initial render
-    renderTable();
+    fetchContainers();
 });

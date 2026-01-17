@@ -1,3 +1,4 @@
+"use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -19,6 +20,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeBtn = document.querySelector('.close');
     const settingsForm = document.getElementById('settings-form');
     const createContainerBtn = document.getElementById('create-container-btn');
+    function getToastContainer() {
+        let container = document.getElementById('toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            container.className = 'toast-container';
+            document.body.appendChild(container);
+        }
+        return container;
+    }
+    function showToast(message, type = 'info', duration = 4000) {
+        const container = getToastContainer();
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.setAttribute('role', 'status');
+        toast.setAttribute('aria-live', 'polite');
+        const msg = document.createElement('div');
+        msg.className = 'toast-message';
+        msg.textContent = message;
+        const close = document.createElement('button');
+        close.className = 'toast-close';
+        close.type = 'button';
+        close.textContent = '×';
+        function removeToast() {
+            toast.style.animation = 'toast-exit 0.18s ease-in forwards';
+            toast.addEventListener('animationend', () => {
+                if (toast.parentElement === container) {
+                    container.removeChild(toast);
+                }
+            }, { once: true });
+        }
+        close.addEventListener('click', removeToast);
+        toast.appendChild(msg);
+        toast.appendChild(close);
+        container.appendChild(toast);
+        if (duration > 0) {
+            setTimeout(removeToast, duration);
+        }
+    }
     // Helper function to get auth token
     function getAuthToken() {
         return localStorage.getItem('access_token');
@@ -51,9 +91,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         localStorage.removeItem('user_id');
                         localStorage.removeItem('username');
                         window.location.href = '/login';
+                        return { error: 'Session expired. Please log in again.' };
                     }
-                    const errorData = yield response.json();
-                    return { error: errorData.error || 'API request failed' };
+                    try {
+                        const errorData = yield response.json();
+                        console.error(`${response.status} Error from ${endpoint}:`, errorData);
+                        return { error: errorData.error || errorData.message || `API request failed (${response.status})` };
+                    }
+                    catch (_a) {
+                        const text = yield response.text();
+                        console.error(`${response.status} Error from ${endpoint}:`, text);
+                        return { error: `API request failed (${response.status}): ${text}` };
+                    }
                 }
                 return yield response.json();
             }
@@ -70,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderTable();
             const response = yield apiCall('/api/containers');
             if (response.error) {
-                alert(response.error);
+                showToast(response.error, 'error');
             }
             else if (response && Array.isArray(response)) {
                 containers = response;
@@ -165,37 +214,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const endpoint = `/api/containers/${containerId}/${action}`;
             const response = yield apiCall(endpoint, 'POST');
             if (response.error) {
-                alert(response.error);
+                showToast(response.error, 'error');
             }
             else {
-                alert(response.message || `${action.charAt(0).toUpperCase() + action.slice(1)} successful`);
+                const msg = response.message || `${action.charAt(0).toUpperCase() + action.slice(1)} successful`;
+                showToast(String(msg), 'success');
                 yield fetchContainers();
             }
         });
     }
     // Open settings modal
     function openSettings(container) {
-        var _a, _b;
         currentContainer = container;
         if (!modal || !settingsForm)
             return;
         // Set form values
         document.getElementById('container-title').value = container.name;
         document.getElementById('container-description').value = container.description || '';
-        document.getElementById('container-image').value = container.image || 'alpine';
-        document.getElementById('container-ports').value = ((_a = container.ports) === null || _a === void 0 ? void 0 : _a.join(', ')) || '';
-        document.getElementById('container-volumes').value = ((_b = container.volumes) === null || _b === void 0 ? void 0 : _b.join(', ')) || '';
         // Set environment variables
         const envContainer = document.getElementById('environment-variables');
         envContainer.innerHTML = '';
-        if (container.environment && Object.keys(container.environment).length > 0) {
-            for (const [key, value] of Object.entries(container.environment)) {
-                addEnvironmentVariable(key, value);
-            }
-        }
-        else {
-            addEnvironmentVariable('', '');
-        }
         modal.style.display = 'block';
     }
     // Add environment variable input
@@ -222,42 +260,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     // Handle form submission
-    settingsForm.addEventListener('submit', (e) => __awaiter(this, void 0, void 0, function* () {
+    settingsForm.addEventListener('submit', (e) => __awaiter(void 0, void 0, void 0, function* () {
         e.preventDefault();
         const name = document.getElementById('container-title').value;
         const description = document.getElementById('container-description').value;
-        const image = document.getElementById('container-image').value;
-        const portsInput = document.getElementById('container-ports').value;
-        const volumesInput = document.getElementById('container-volumes').value;
-        // Parse ports and volumes
-        const ports = portsInput.split(',').map(p => p.trim()).filter(p => p);
-        const volumes = volumesInput.split(',').map(v => v.trim()).filter(v => v);
         // Parse environment variables
-        const envRows = document.querySelectorAll('.env-row');
-        const environment = {};
-        envRows.forEach(row => {
-            const key = row.querySelector('.env-key').value.trim();
-            const value = row.querySelector('.env-value').value.trim();
-            if (key) {
-                environment[key] = value;
-            }
-        });
         const containerData = {
             name,
             description,
-            image,
-            ports,
-            volumes,
-            environment
         };
         if (currentContainer) {
             // Update existing container
             const response = yield apiCall(`/api/containers/${currentContainer.id}`, 'PUT', containerData);
             if (response.error) {
-                alert(response.error);
+                showToast(response.error, 'error');
             }
             else {
-                alert('Container updated successfully');
+                showToast('Container updated successfully', 'success');
                 yield fetchContainers();
                 closeModal();
             }
@@ -266,10 +285,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Create new container
             const response = yield apiCall('/api/containers', 'POST', containerData);
             if (response.error) {
-                alert(response.error);
+                showToast(response.error, 'error');
             }
             else {
-                alert('Container created successfully');
+                showToast('Container created successfully', 'success');
                 yield fetchContainers();
                 closeModal();
             }
@@ -285,13 +304,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset form
         document.getElementById('container-title').value = '';
         document.getElementById('container-description').value = '';
-        document.getElementById('container-image').value = 'alpine';
-        document.getElementById('container-ports').value = '';
-        document.getElementById('container-volumes').value = '';
-        // Reset environment variables
-        const envContainer = document.getElementById('environment-variables');
-        envContainer.innerHTML = '';
-        addEnvironmentVariable();
         // Show modal
         modal.style.display = 'block';
     });
@@ -305,5 +317,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     // Initial render
-    renderTable();
+    fetchContainers();
 });

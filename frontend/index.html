@@ -48,25 +48,6 @@
                     <label for="container-description">Description:</label>
                     <textarea id="container-description" name="description"></textarea>
                 </div>
-                <div class="form-group">
-                    <label for="container-image">Image:</label>
-                    <input type="text" id="container-image" name="image" value="alpine" required>
-                </div>
-                <div class="form-group">
-                    <label for="container-ports">Ports (comma separated):</label>
-                    <input type="text" id="container-ports" name="ports" placeholder="e.g., 8080:80, 443:443">
-                </div>
-                <div class="form-group">
-                    <label for="container-volumes">Volumes (comma separated):</label>
-                    <input type="text" id="container-volumes" name="volumes" placeholder="e.g., /host:/container, /data:/app/data">
-                </div>
-                <div class="form-group">
-                    <label>Environment Variables:</label>
-                    <div id="environment-variables" class="environment-variables">
-                        <!-- Environment variables will be added here -->
-                    </div>
-                    <button type="button" id="add-env-btn" class="add-env-btn">Add Variable</button>
-                </div>
                 <button type="submit">Save</button>
             </form>
         </div>
