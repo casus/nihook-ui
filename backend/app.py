@@ -226,16 +226,6 @@ def serve_static(filename):
     return send_from_directory('../frontend', filename)
 
 
-@app.route('/styles.css')
-def serve_css():
-    return send_from_directory('../frontend', 'styles.css')
-
-
-@app.route('/app.js')
-def serve_js():
-    return send_from_directory('../frontend', 'app.js')
-
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'GET':
@@ -292,7 +282,6 @@ def logout():
 @jwt_required()
 def get_containers():
     current_user_id = get_jwt_identity()
-    print("current_user_id:", current_user_id)
     containers = Container.query.filter_by(user_id=current_user_id).all()
 
     # Update status from remote server using custom scripts

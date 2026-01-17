@@ -46,6 +46,9 @@ instance/
 *.sqlite3
 containers.db
 
+# TypeScript compiled output
+frontend/out/
+
 # IDE & Editor
 .vscode/
 .idea/
