@@ -8,11 +8,11 @@ import logging
 import os
 import paramiko
 from dotenv import load_dotenv
+from config import Config
 import json
 import os
 
 # Load environment variables
-load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,14 +24,8 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, static_folder='../frontend',
             template_folder='../frontend')
 
-# Configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///containers.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRET_KEY'] = os.getenv(
-    'JWT_SECRET_KEY', 'super-secret-key-change-me')
-app.config['JWT_TOKEN_LOCATION'] = ['headers', 'cookies']
-app.config['JWT_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
-app.config['JWT_COOKIE_CSRF_PROTECT'] = True
+# Load configuration from Config class
+app.config.from_object(Config)
 
 # Initialize extensions
 db = SQLAlchemy(app)
@@ -64,6 +58,11 @@ class User(db.Model):
     password_hash = db.Column(db.String(128), nullable=False)
     containers = db.relationship('Container', backref='owner', lazy=True)
 
+    def __init__(self, username, email, password_hash):
+        self.username = username
+        self.email = email
+        self.password_hash = password_hash
+
 
 class Container(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -75,6 +74,14 @@ class Container(db.Model):
     # Additional container properties
     ports = db.Column(db.String(255))  # JSON string
     folder_name = db.Column(db.String(255))
+
+    def __init__(self, name, description='', user_id=None, status='stopped', ports=None, folder_name=None):
+        self.name = name
+        self.description = description
+        self.user_id = user_id
+        self.status = status
+        self.ports = ports
+        self.folder_name = folder_name
 
     def to_dict(self):
         return {
@@ -91,21 +98,12 @@ class Container(db.Model):
 with app.app_context():
     db.create_all()
 
-# SSH Configuration
-SSH_CONFIG = {
-    'hostname': os.getenv('SSH_HOSTNAME', 'localhost'),
-    'port': int(os.getenv('SSH_PORT', 22)),
-    'username': os.getenv('SSH_USERNAME', 'root'),
-    'password': os.getenv('SSH_PASSWORD', ''),
-    'key_filename': os.getenv('SSH_KEY_FILE', None)
-}
-
-# Container Scripts Configuration
-CONTAINER_SCRIPTS_DIR = os.getenv(
-    'CONTAINER_SCRIPTS_DIR', '/path/to/container_scripts')
-SPIN_UP_SCRIPT = os.getenv('SPIN_UP_SCRIPT', 'spin_up_new_instance.sh')
-RESTART_SCRIPT = os.getenv('RESTART_SCRIPT', 'restart_instances.sh')
-RESUME_SCRIPT = os.getenv('RESUME_SCRIPT', 'resume_instances.sh')
+# Use values from Config
+SSH_CONFIG = Config.SSH_CONFIG
+CONTAINER_SCRIPTS_DIR = Config.CONTAINER_SCRIPTS_DIR
+SPIN_UP_SCRIPT = Config.SPIN_UP_SCRIPT
+RESTART_SCRIPT = Config.RESTART_SCRIPT
+RESUME_SCRIPT = Config.RESUME_SCRIPT
 
 
 def get_ssh_client():
@@ -226,16 +224,6 @@ def serve_static(filename):
     return send_from_directory('../frontend', filename)
 
 
-@app.route('/styles.css')
-def serve_css():
-    return send_from_directory('../frontend', 'styles.css')
-
-
-@app.route('/app.js')
-def serve_js():
-    return send_from_directory('../frontend', 'app.js')
-
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'GET':
@@ -243,11 +231,13 @@ def login():
 
     data = request.get_json()
     username = data.get('username')
+    # TODO: Change this to hashed password comparison
     password = data.get('password')
 
     user = User.query.filter_by(username=username).first()
     if user and check_password_hash(user.password_hash, password):
-        access_token = create_access_token(identity=user.id)
+        # Use string identity to be compatible with newer flask-jwt-extended
+        access_token = create_access_token(identity=str(user.id))
         return jsonify({
             'access_token': access_token,
             'user_id': user.id,
@@ -291,8 +281,10 @@ def logout():
 @app.route('/api/containers', methods=['GET'])
 @jwt_required()
 def get_containers():
-    current_user_id = get_jwt_identity()
-    print("current_user_id:", current_user_id)
+    try:
+        current_user_id = int(get_jwt_identity())
+    except Exception:
+        return jsonify({'error': 'Invalid user identity in token'}), 401
     containers = Container.query.filter_by(user_id=current_user_id).all()
 
     # Update status from remote server using custom scripts
@@ -319,7 +311,10 @@ def get_containers():
 @app.route('/api/containers', methods=['POST'])
 @jwt_required()
 def create_container():
-    current_user_id = get_jwt_identity()
+    try:
+        current_user_id = int(get_jwt_identity())
+    except Exception:
+        return jsonify({'error': 'Invalid user identity in token'}), 401
     data = request.get_json()
 
     # Create container record in database
@@ -329,6 +324,7 @@ def create_container():
         user_id=current_user_id,
     )
 
+    # TODO: Get Ports from the script and then save to DB
     db.session.add(new_container)
     db.session.commit()
 
@@ -336,19 +332,6 @@ def create_container():
     # Build arguments for the spin_up script
     script_args = []
 
-    if data.get('ports'):
-        for port in data['ports']:
-            script_args.append(f'--port {port}')
-
-    if data.get('volumes'):
-        for volume in data['volumes']:
-            script_args.append(f'--volume {volume}')
-
-    if data.get('environment'):
-        for key, value in data['environment'].items():
-            script_args.append(f'--env {key}={value}')
-
-    script_args.append(f'--image {data.get("image", "alpine")}')
     script_args.append(f'--name {data["name"]}')
 
     args_str = ' '.join(script_args)
@@ -366,7 +349,10 @@ def create_container():
 @app.route('/api/containers/<int:container_id>', methods=['GET'])
 @jwt_required()
 def get_container(container_id):
-    current_user_id = get_jwt_identity()
+    try:
+        current_user_id = int(get_jwt_identity())
+    except Exception:
+        return jsonify({'error': 'Invalid user identity in token'}), 401
     container = Container.query.filter_by(
         id=container_id, user_id=current_user_id).first()
 
@@ -386,7 +372,10 @@ def get_container(container_id):
 @app.route('/api/containers/<int:container_id>', methods=['PUT'])
 @jwt_required()
 def update_container(container_id):
-    current_user_id = get_jwt_identity()
+    try:
+        current_user_id = int(get_jwt_identity())
+    except Exception:
+        return jsonify({'error': 'Invalid user identity in token'}), 401
     container = Container.query.filter_by(
         id=container_id, user_id=current_user_id).first()
 
@@ -400,15 +389,6 @@ def update_container(container_id):
         container.name = data['name']
     if 'description' in data:
         container.description = data['description']
-    if 'image' in data:
-        container.image = data['image']
-    if 'ports' in data:
-        container.ports = json.dumps(data['ports'])
-    if 'volumes' in data:
-        container.volumes = json.dumps(data['volumes'])
-    if 'environment' in data:
-        container.environment = json.dumps(data['environment'])
-
     db.session.commit()
 
     return jsonify(container.to_dict()), 200
@@ -417,7 +397,10 @@ def update_container(container_id):
 @app.route('/api/containers/<int:container_id>/start', methods=['POST'])
 @jwt_required()
 def start_container(container_id):
-    current_user_id = get_jwt_identity()
+    try:
+        current_user_id = int(get_jwt_identity())
+    except Exception:
+        return jsonify({'error': 'Invalid user identity in token'}), 401
     container = Container.query.filter_by(
         id=container_id, user_id=current_user_id).first()
 
@@ -438,7 +421,10 @@ def start_container(container_id):
 @app.route('/api/containers/<int:container_id>/stop', methods=['POST'])
 @jwt_required()
 def stop_container(container_id):
-    current_user_id = get_jwt_identity()
+    try:
+        current_user_id = int(get_jwt_identity())
+    except Exception:
+        return jsonify({'error': 'Invalid user identity in token'}), 401
     container = Container.query.filter_by(
         id=container_id, user_id=current_user_id).first()
 
@@ -458,7 +444,10 @@ def stop_container(container_id):
 @app.route('/api/containers/<int:container_id>/restart', methods=['POST'])
 @jwt_required()
 def restart_container(container_id):
-    current_user_id = get_jwt_identity()
+    try:
+        current_user_id = int(get_jwt_identity())
+    except Exception:
+        return jsonify({'error': 'Invalid user identity in token'}), 401
     container = Container.query.filter_by(
         id=container_id, user_id=current_user_id).first()
 

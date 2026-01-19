@@ -2,7 +2,6 @@
 .env
 .env.local
 .env.*.local
-.env.example
 
 # Python
 __pycache__/
@@ -46,6 +45,9 @@ instance/
 *.sqlite
 *.sqlite3
 containers.db
+
+# TypeScript compiled output
+frontend/out/
 
 # IDE & Editor
 .vscode/
