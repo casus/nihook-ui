@@ -107,7 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data) {
                 options.body = JSON.stringify(data);
             }
-            
             const response = await fetch(endpoint, options);
             
             if (!response.ok) {
