@@ -1,0 +1,41 @@
+import os
+import re
+from typing import Optional, Dict
+
+
+def parse_spinup_output(output: str, nihook_folder: str) -> Dict[str, Optional[str]]:
+    """Parse the spin-up output and return podman_id, ports and folder_path.
+
+    Args:
+        output: Full stdout/stderr text returned by the spin-up script.
+        nihook_folder: Absolute path to the NIHOOK_FOLDER (e.g. /home/user/nihook).
+
+    Returns:
+        A dict with keys: 'podman_id', 'ports', 'folder_path'. Values are strings
+        or None if not found.
+    """
+    # Podman/container id: look for a 64-char hex string on its own or within text
+    podman_match = re.search(r"\b([0-9a-f]{64})\b", output)
+    podman_id = podman_match.group(1) if podman_match else None
+
+    # Ports: appear in the created folder name like 'nocodb_webhook_instance_5595_7595'
+    ports_match = re.search(r"nocodb_webhook_instance_([0-9_]+)", output)
+    ports = ports_match.group(1) if ports_match else None
+
+    # folder_path: join nihook_folder with the created directory name if ports found
+    folder_path = None
+    if ports:
+        folder_name = f"nocodb_webhook_instance_{ports}"
+        # Ensure absolute path and normalized
+        folder_path = os.path.normpath(
+            os.path.join(nihook_folder, folder_name))
+
+    return {"podman_id": podman_id, "ports": ports, "folder_path": folder_path}
+
+
+if __name__ == "__main__":
+    # Quick manual smoke test when run directly
+    import sys
+    nihook = sys.argv[1] if len(sys.argv) > 1 else "."
+    txt = sys.stdin.read()
+    print(parse_spinup_output(txt, nihook))

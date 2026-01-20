@@ -270,34 +270,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Set form values
         (document.getElementById('container-title') as HTMLInputElement).value = container.name;
         (document.getElementById('container-description') as HTMLTextAreaElement).value = container.description || '';
-        
-        // Set environment variables
-        const envContainer = document.getElementById('environment-variables') as HTMLDivElement;
-        envContainer.innerHTML = '';
 
         modal.style.display = 'block';
     }
     
-    // Add environment variable input
-    function addEnvironmentVariable(key: string = '', value: string = '') {
-        const envContainer = document.getElementById('environment-variables') as HTMLDivElement;
-        const envRow = document.createElement('div');
-        envRow.className = 'env-row';
-        
-        envRow.innerHTML = `
-            <input type="text" class="env-key" placeholder="KEY" value="${key}">
-            <input type="text" class="env-value" placeholder="VALUE" value="${value}">
-            <button type="button" class="remove-env-btn">×</button>
-        `;
-        
-        envContainer.appendChild(envRow);
-        
-        // Add event listener to remove button
-        envRow.querySelector('.remove-env-btn')?.addEventListener('click', () => {
-            envContainer.removeChild(envRow);
-        });
-    }
-
     // Close modal
     function closeModal() {
         if (modal) {
@@ -342,11 +318,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 closeModal();
             }
         }
-    });
-    
-    // Set up add environment variable button
-    document.getElementById('add-env-btn')?.addEventListener('click', () => {
-        addEnvironmentVariable();
     });
     
     // Set up create container button

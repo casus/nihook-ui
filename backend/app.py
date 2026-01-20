@@ -5,12 +5,10 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 import logging
-import os
 import paramiko
-from dotenv import load_dotenv
+from output_parser import parse_spinup_output
 from config import Config
 import json
-import os
 
 # Load environment variables
 
@@ -72,25 +70,29 @@ class Container(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
     # Additional container properties
-    ports = db.Column(db.String(255))  # JSON string
-    folder_name = db.Column(db.String(255))
+    ports = db.Column(db.String(255))
+    folder_path = db.Column(db.String(255))
+    podman_id = db.Column(db.String(255))
 
-    def __init__(self, name, description='', user_id=None, status='stopped', ports=None, folder_name=None):
+    def __init__(self, name, description='', user_id=None, status='stopped', ports=None, folder_path=None, podman_id=None):
         self.name = name
         self.description = description
         self.user_id = user_id
         self.status = status
         self.ports = ports
-        self.folder_name = folder_name
+        self.folder_path = folder_path
+        self.podman_id = podman_id
 
     def to_dict(self):
         return {
             'id': self.id,
             'name': self.name,
             'description': self.description,
+            'user_id': self.user_id,
             'status': self.status,
-            'ports': json.loads(self.ports) if self.ports else [],
-            'folder_name': self.folder_name,
+            'ports': self.ports,
+            'folder_path': self.folder_path,
+            'podman_id': self.podman_id,
         }
 
 
@@ -101,6 +103,7 @@ with app.app_context():
 # Use values from Config
 SSH_CONFIG = Config.SSH_CONFIG
 CONTAINER_SCRIPTS_DIR = Config.CONTAINER_SCRIPTS_DIR
+NIHOOK_FOLDER = Config.NIHOOK_FOLDER
 SPIN_UP_SCRIPT = Config.SPIN_UP_SCRIPT
 RESTART_SCRIPT = Config.RESTART_SCRIPT
 RESUME_SCRIPT = Config.RESUME_SCRIPT
@@ -143,16 +146,24 @@ def execute_podman_command(command):
     client = get_ssh_client()
     if not client:
         return None, "Failed to connect to remote server"
-
+    print("Executing podman command:", command)
     try:
         stdin, stdout, stderr = client.exec_command(f'podman {command}')
-        output = stdout.read().decode().strip()
-        error = stderr.read().decode().strip()
+        out_bytes = stdout.read()
+        err_bytes = stderr.read()
+        output = out_bytes.decode().strip()
+        error = err_bytes.decode().strip()
 
-        if error:
+        # Check the remote command exit status. Some podman messages are
+        # warnings printed to stderr but still exit with status 0 (success).
+        exit_status = stdout.channel.recv_exit_status()
+        if exit_status != 0:
             logger.error(
-                "Podman command error during the command: \n%s \n%s", error, command)
-            return None, error
+                "Podman command failed (exit %s): %s\nstderr: %s",
+                exit_status, command, error)
+            return None, error or f'podman exited with status {exit_status}'
+
+        # Success (exit_status == 0) — return stdout even if stderr contained warnings
         return output, None
     except Exception as e:
         logger.error(
@@ -162,23 +173,28 @@ def execute_podman_command(command):
         client.close()
 
 
-def execute_container_script(script_name, container_name, additional_args=""):
+def execute_container_script(script_name, container_folder, additional_args=""):
     """Execute a custom container management script on the remote server"""
     client = get_ssh_client()
     if not client:
         return None, "Failed to connect to remote server"
 
-    full_command = f'cd {CONTAINER_SCRIPTS_DIR} && ./{script_name} {container_name} {additional_args}'
+    full_command = f'cd {NIHOOK_FOLDER} && {CONTAINER_SCRIPTS_DIR}/{script_name} {container_folder if container_folder else ""} {additional_args}'
     try:
         # Change to the scripts directory and execute the script
         stdin, stdout, stderr = client.exec_command(full_command)
-        output = stdout.read().decode().strip()
-        error = stderr.read().decode().strip()
+        out_bytes = stdout.read()
+        err_bytes = stderr.read()
+        output = out_bytes.decode().strip()
+        error = err_bytes.decode().strip()
 
-        if error:
+        exit_status = stdout.channel.recv_exit_status()
+        if exit_status != 0:
             logger.error(
-                "Container script error during the command: \n%s \n%s", error, full_command)
-            return None, error
+                "Container script failed (exit %s): %s\nstderr: %s",
+                exit_status, full_command, error)
+            return None, error or f'script exited with status {exit_status}'
+
         return output, None
     except Exception as e:
         logger.error(
@@ -287,22 +303,42 @@ def get_containers():
         return jsonify({'error': 'Invalid user identity in token'}), 401
     containers = Container.query.filter_by(user_id=current_user_id).all()
 
-    # Update status from remote server using custom scripts
-    for container in containers:
-        # Get container status using resume script (or other appropriate script)
-        # For now, we'll use a simple podman inspect, but you can replace this
-        # with your custom script logic
+    # Batch-update statuses with a single podman inspect call to save SSH roundtrips
+    podman_ids = [c.podman_id for c in containers if c.podman_id]
+    if podman_ids:
+        ids_str = ' '.join(podman_ids)
+        # format outputs lines like: <id>:<Status>
         output, error = execute_podman_command(
-            f'inspect {container.name} --format "{{{{.State.Status}}}}"')
-        if output:
-            container.status = output.lower()
-            db.session.commit()
-        else:
-            # If podman inspect fails, try using the custom script
-            output, error = execute_container_script(
-                RESUME_SCRIPT, container.name, "--status")
-            if output:
-                container.status = output.lower()
+            f'inspect {ids_str} --format "{{{{.Id}}}}:{{{{.State.Status}}}}"')
+        if output and not error:
+            # Parse lines and map statuses back to container objects
+            id_status = {}
+            for line in output.splitlines():
+                parts = line.strip().split(':', 1)
+                if len(parts) != 2:
+                    continue
+                pid, status = parts
+                id_status[pid] = status
+
+            # Update matching Container objects (match by equality or prefix)
+            updated = False
+            for c in containers:
+                if not c.podman_id:
+                    continue
+                # Find matching inspected id (full id returned by podman may be longer)
+                matched_status = None
+                for inspected_id, status in id_status.items():
+                    if inspected_id == c.podman_id or inspected_id.startswith(c.podman_id) or c.podman_id.startswith(inspected_id):
+                        matched_status = status
+                        break
+                if matched_status:
+                    new_status = matched_status.lower()
+                    if c.status != new_status:
+                        c.status = new_status
+                        updated = True
+
+            # Commit once if any container changed
+            if updated:
                 db.session.commit()
 
     return jsonify([container.to_dict() for container in containers]), 200
@@ -324,25 +360,27 @@ def create_container():
         user_id=current_user_id,
     )
 
-    # TODO: Get Ports from the script and then save to DB
-    db.session.add(new_container)
-    db.session.commit()
-
     # Create container on remote server using custom script
     # Build arguments for the spin_up script
     script_args = []
 
-    script_args.append(f'--name {data["name"]}')
+    # script_args.append(f'--name {data["name"]}')
 
     args_str = ' '.join(script_args)
 
     output, error = execute_container_script(
-        SPIN_UP_SCRIPT, data["name"], args_str)
-    if error:
-        db.session.delete(new_container)
-        db.session.commit()
+        SPIN_UP_SCRIPT, None, args_str)
+    if not output or error:
         return jsonify({'error': f'Failed to create container: {error}'}), 500
-
+    container_details = parse_spinup_output(output, NIHOOK_FOLDER)
+    new_container.podman_id = container_details.get('podman_id')
+    new_container.ports = container_details.get('ports')
+    new_container.folder_path = container_details.get('folder_path')
+    new_container.status = 'running'
+    # Persist the new Container object to the database
+    db.session.add(new_container)
+    db.session.commit()
+    logger.info("Created new container: %s", new_container.to_dict())
     return jsonify(new_container.to_dict()), 201
 
 
@@ -361,7 +399,7 @@ def get_container(container_id):
 
     # Update status from remote server
     output, error = execute_podman_command(
-        f'inspect {container.name} --format "{{{{.State.Status}}}}"')
+        f'inspect {container.podman_id} --format "{{{{.State.Status}}}}"')
     if output:
         container.status = output.lower()
         db.session.commit()
@@ -408,11 +446,19 @@ def start_container(container_id):
         return jsonify({'error': 'Container not found'}), 404
 
     # Use custom resume script to start container
-    output, error = execute_container_script(RESUME_SCRIPT, container.name)
-    if error:
+    output, error = execute_container_script(
+        RESUME_SCRIPT, container.folder_path)
+
+    if not output or error:
         return jsonify({'error': f'Failed to start container: {error}'}), 500
 
+    container_details = parse_spinup_output(output, NIHOOK_FOLDER)
+    container.podman_id = container_details.get('podman_id')
+    container.ports = container_details.get('ports')
+    container.folder_path = container_details.get('folder_path')
     container.status = 'running'
+    # Persist the new Container object to the database
+    db.session.add(container)
     db.session.commit()
 
     return jsonify({'message': 'Container started successfully', 'status': container.status}), 200
@@ -431,7 +477,7 @@ def stop_container(container_id):
     if not container:
         return jsonify({'error': 'Container not found'}), 404
 
-    output, error = execute_podman_command(f'stop {container.name}')
+    output, error = execute_podman_command(f'stop {container.podman_id}')
     if error:
         return jsonify({'error': f'Failed to stop container: {error}'}), 500
 
@@ -455,7 +501,8 @@ def restart_container(container_id):
         return jsonify({'error': 'Container not found'}), 404
 
     # Use custom restart script to restart container
-    output, error = execute_container_script(RESTART_SCRIPT, container.name)
+    output, error = execute_container_script(
+        RESTART_SCRIPT, container.folder_path)
     if error:
         return jsonify({'error': f'Failed to restart container: {error}'}), 500
 
@@ -468,7 +515,10 @@ def restart_container(container_id):
 @app.route('/api/containers/<int:container_id>/delete', methods=['POST'])
 @jwt_required()
 def delete_container(container_id):
-    current_user_id = get_jwt_identity()
+    try:
+        current_user_id = int(get_jwt_identity())
+    except Exception:
+        return jsonify({'error': 'Invalid user identity in token'}), 401
     container = Container.query.filter_by(
         id=container_id, user_id=current_user_id).first()
 
@@ -476,7 +526,8 @@ def delete_container(container_id):
         return jsonify({'error': 'Container not found'}), 404
 
     # Remove container from remote server
-    output, error = execute_podman_command(f'rm -f {container.name}')
+    output, error = execute_podman_command(
+        f'rm -f {container.podman_id} && rm -rf {container.folder_path}')
     if error:
         return jsonify({'error': f'Failed to delete container: {error}'}), 500
 

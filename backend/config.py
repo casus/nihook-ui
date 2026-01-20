@@ -36,8 +36,9 @@ class Config:
     PODMAN_BINARY = os.getenv('PODMAN_BINARY', 'podman')
 
     # Container scripts configuration
+    NIHOOK_FOLDER = os.getenv('NIHOOK_FOLDER', '/path/to/nihook')
     CONTAINER_SCRIPTS_DIR = os.getenv(
-        'CONTAINER_SCRIPTS_DIR', '/path/to/knuepf66-container')
+        'CONTAINER_SCRIPTS_DIR', '/path/to/nihook/scripts')
     SPIN_UP_SCRIPT = os.getenv('SPIN_UP_SCRIPT', 'spin_up_new_instance.sh')
     RESTART_SCRIPT = os.getenv('RESTART_SCRIPT', 'restart_instances.sh')
     RESUME_SCRIPT = os.getenv('RESUME_SCRIPT', 'resume_instances.sh')
