@@ -52,6 +52,66 @@
             </form>
         </div>
     </div>
+
+    <!-- Logs Modal -->
+    <div id="logs-modal" class="modal">
+        <div class="modal-content logs-modal-content">
+            <span class="close">&times;</span>
+            <h2>Container Logs</h2>
+            <div id="logs-container">
+                <div id="log-files-list"></div>
+                <div id="log-content-viewer">
+                    <div id="log-header">
+                        <h3 id="current-log-filename"></h3>
+                        <div class="log-actions">
+                            <button id="refresh-log-btn" class="action-btn">Refresh</button>
+                            <button id="download-log-btn" class="action-btn">Download</button>
+                        </div>
+                    </div>
+                    <div id="log-content"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Container Info Modal -->
+    <div id="container-info-modal" class="modal">
+        <div class="modal-content container-info-modal-content">
+            <span class="close">&times;</span>
+            <h2 id="container-info-title">Container Information</h2>
+            <div id="container-info-content">
+                <div class="container-info-section">
+                    <h3>Basic Information</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Name:</span>
+                            <span class="info-value" id="container-info-name"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Status:</span>
+                            <span class="info-value" id="container-info-status"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Folder Path:</span>
+                            <span class="info-value" id="container-info-folder-path"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Port:</span>
+                            <span class="info-value" id="container-info-port"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Public URL:</span>
+                            <a class="info-value" id="container-info-url" href="" target="_blank"></a>
+                        </div>
+                    </div>
+                </div>
+                <div class="container-info-section">
+                    <h3>Instructions</h3>
+                    <div class="instructions-content" id="container-info-instructions"></div>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <script src="./out/app.js"></script>
     <script>

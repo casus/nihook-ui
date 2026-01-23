@@ -73,8 +73,10 @@ class Container(db.Model):
     ports = db.Column(db.String(255))
     folder_path = db.Column(db.String(255))
     podman_id = db.Column(db.String(255))
+    public_url = db.Column(db.String(255))
+    instructions = db.Column(db.Text)
 
-    def __init__(self, name, description='', user_id=None, status='stopped', ports=None, folder_path=None, podman_id=None):
+    def __init__(self, name, description='', user_id=None, status='stopped', ports=None, folder_path=None, podman_id=None, public_url=None, instructions=None):
         self.name = name
         self.description = description
         self.user_id = user_id
@@ -82,6 +84,8 @@ class Container(db.Model):
         self.ports = ports
         self.folder_path = folder_path
         self.podman_id = podman_id
+        self.public_url = public_url
+        self.instructions = instructions
 
     def to_dict(self):
         return {
@@ -93,6 +97,8 @@ class Container(db.Model):
             'ports': self.ports,
             'folder_path': self.folder_path,
             'podman_id': self.podman_id,
+            'public_url': self.public_url,
+            'instructions': self.instructions,
         }
 
 
@@ -376,6 +382,8 @@ def create_container():
     new_container.podman_id = container_details.get('podman_id')
     new_container.ports = container_details.get('ports')
     new_container.folder_path = container_details.get('folder_path')
+    new_container.public_url = container_details.get('public_url')
+    new_container.instructions = container_details.get('instructions')
     new_container.status = 'running'
     # Persist the new Container object to the database
     db.session.add(new_container)
@@ -456,6 +464,8 @@ def start_container(container_id):
     container.podman_id = container_details.get('podman_id')
     container.ports = container_details.get('ports')
     container.folder_path = container_details.get('folder_path')
+    container.public_url = container_details.get('public_url')
+    container.instructions = container_details.get('instructions')
     container.status = 'running'
     # Persist the new Container object to the database
     db.session.add(container)
@@ -506,6 +516,15 @@ def restart_container(container_id):
     if error:
         return jsonify({'error': f'Failed to restart container: {error}'}), 500
 
+    # Update container details from restart output
+    container_details = parse_spinup_output(output, NIHOOK_FOLDER)
+    if container_details.get('podman_id'):
+        container.podman_id = container_details.get('podman_id')
+    if container_details.get('public_url'):
+        container.public_url = container_details.get('public_url')
+    if container_details.get('instructions'):
+        container.instructions = container_details.get('instructions')
+    
     container.status = 'running'
     db.session.commit()
 
@@ -536,6 +555,109 @@ def delete_container(container_id):
     db.session.commit()
 
     return jsonify({'message': 'Container deleted successfully'}), 200
+
+
+@app.route('/api/containers/<int:container_id>/logs', methods=['GET'])
+@jwt_required()
+def list_container_logs(container_id):
+    """List available log files in container's logs directory"""
+    try:
+        current_user_id = int(get_jwt_identity())
+    except Exception:
+        return jsonify({'error': 'Invalid user identity in token'}), 401
+    
+    container = Container.query.filter_by(
+        id=container_id, user_id=current_user_id).first()
+
+    if not container:
+        return jsonify({'error': 'Container not found'}), 404
+    
+    if not container.folder_path:
+        return jsonify({'error': 'Container has no folder path configured'}), 400
+    
+    # List log files in the container's logs directory
+    logs_dir = f"{container.folder_path}/logs"
+    
+    client = get_ssh_client()
+    if not client:
+        return jsonify({'error': 'Failed to connect to remote server'}), 500
+    
+    try:
+        # Check if logs directory exists
+        command_to_execute = f'ls {logs_dir} 2>/dev/null'
+        stdin, stdout, stderr = client.exec_command(command_to_execute)
+        print("Executed command:", command_to_execute)
+        log_files = stdout.read().decode().strip()
+        
+        if not log_files:
+            return jsonify({'files': []}), 200
+        
+        # Extract just the filenames (without full path)
+        files = []
+        for line in log_files.split('\n'):
+            if line.strip():
+                filename = line.split('/')[-1]
+                files.append(filename)
+        
+        return jsonify({'files': files}), 200
+        
+    except Exception as e:
+        logger.error(f"Error listing log files: {e}")
+        return jsonify({'error': f'Failed to list log files: {str(e)}'}), 500
+    finally:
+        client.close()
+
+
+@app.route('/api/containers/<int:container_id>/logs/<filename>', methods=['GET'])
+@jwt_required()
+def get_container_log(container_id, filename):
+    """Get content of a specific log file"""
+    try:
+        current_user_id = int(get_jwt_identity())
+    except Exception:
+        return jsonify({'error': 'Invalid user identity in token'}), 401
+    
+    container = Container.query.filter_by(
+        id=container_id, user_id=current_user_id).first()
+
+    if not container:
+        return jsonify({'error': 'Container not found'}), 404
+    
+    if not container.folder_path:
+        return jsonify({'error': 'Container has no folder path configured'}), 400
+    
+    # Validate filename to prevent directory traversal
+    if not filename.endswith('.log'):
+        return jsonify({'error': 'Invalid log file name'}), 400
+    
+    if '..' in filename or '/' in filename:
+        return jsonify({'error': 'Invalid log file name'}), 400
+    
+    log_file_path = f"{container.folder_path}/logs/{filename}"
+    
+    client = get_ssh_client()
+    if not client:
+        return jsonify({'error': 'Failed to connect to remote server'}), 500
+    
+    try:
+        # Check if file exists and get its content
+        stdin, stdout, stderr = client.exec_command(f'cat {log_file_path} 2>/dev/null')
+        content = stdout.read().decode('utf-8', errors='replace')
+        
+        if not content:
+            return jsonify({'error': 'Log file is empty or does not exist'}), 404
+        
+        return jsonify({
+            'filename': filename,
+            'content': content,
+            'container_id': container_id
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error reading log file {filename}: {e}")
+        return jsonify({'error': f'Failed to read log file: {str(e)}'}), 500
+    finally:
+        client.close()
 
 
 if __name__ == '__main__':

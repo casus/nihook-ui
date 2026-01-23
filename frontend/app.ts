@@ -4,11 +4,15 @@ interface Container {
     name: string;
     status: string;
     description: string;
+    folder_path?: string;
+    podman_id?: string;
+    ports?: string;
+    public_url?: string;
+    instructions?: string;
 }
 
 // API Response interfaces
-interface ApiResponse<T> {
-    data?: T;
+type ApiResponse<T> = T & {
     error?: string;
     message?: string;
 }
@@ -90,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const token = getAuthToken();
         if (!token) {
             window.location.href = '/login';
-            return { error: 'Not authenticated' };
+            return { error: 'Not authenticated' } as ApiResponse<T>;
         }
         
         try {
@@ -116,24 +120,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.removeItem('user_id');
                     localStorage.removeItem('username');
                     window.location.href = '/login';
-                    return { error: 'Session expired. Please log in again.' };
+                    return { error: 'Session expired. Please log in again.' } as ApiResponse<T>;
                 }
                 
                 try {
                     const errorData = await response.json();
                     console.error(`${response.status} Error from ${endpoint}:`, errorData);
-                    return { error: errorData.error || errorData.message || `API request failed (${response.status})` };
+                    return { error: errorData.error || errorData.message || `API request failed (${response.status})` } as ApiResponse<T>;
                 } catch {
                     const text = await response.text();
                     console.error(`${response.status} Error from ${endpoint}:`, text);
-                    return { error: `API request failed (${response.status}): ${text}` };
+                    return { error: `API request failed (${response.status}): ${text}` } as ApiResponse<T>;
                 }
             }
             
-            return await response.json();
+            return await response.json() as ApiResponse<T>;
         } catch (error) {
             console.error('API call error:', error);
-            return { error: 'Network error. Please try again.' };
+            return { error: 'Network error. Please try again.' } as ApiResponse<T>;
         }
     }
 
@@ -148,6 +152,10 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast(response.error, 'error');
         } else if (response && Array.isArray(response)) {
             containers = response;
+            // Initialize previousContainers after first successful fetch
+            if (previousContainers.length === 0) {
+                previousContainers = [...response];
+            }
         }
         
         isLoading = false;
@@ -185,15 +193,38 @@ document.addEventListener('DOMContentLoaded', () => {
         containers.forEach(container => {
             const row = document.createElement('tr');
 
-            // Name cell
+            // Name cell - make it clickable
             const nameCell = document.createElement('td');
-            nameCell.textContent = container.name;
+            const nameLink = document.createElement('a');
+            nameLink.href = '#';
+            nameLink.textContent = container.name;
+            nameLink.className = 'container-name-link';
+            
+            // Apply visual indicators for new/updated containers
+            const containerUpdateStatusValue = containerUpdateStatus.get(container.id);
+            if (containerUpdateStatusValue === 'new') {
+                nameLink.classList.add('container-new');
+            } else if (containerUpdateStatusValue === 'updated') {
+                nameLink.classList.add('container-updated');
+            }
+            
+            nameLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                showContainerInfoModal(container);
+            });
+            nameCell.appendChild(nameLink);
             row.appendChild(nameCell);
 
             // Status cell
             const statusCell = document.createElement('td');
             const statusIndicator = document.createElement('span');
             statusIndicator.className = `status-indicator status-${container.status}`;
+            
+            // Apply updated status indicator if this container was updated
+            if (containerUpdateStatusValue === 'updated') {
+                statusIndicator.classList.add('status-updated');
+            }
+            
             statusCell.appendChild(statusIndicator);
             row.appendChild(statusCell);
 
@@ -235,6 +266,13 @@ document.addEventListener('DOMContentLoaded', () => {
             deleteBtn.textContent = 'Delete';
             deleteBtn.addEventListener('click', () => handleContainerAction(container.id, 'delete'));
             actionsDiv.appendChild(deleteBtn);
+            
+            // Logs button
+            const logsBtn = document.createElement('button');
+            logsBtn.className = 'action-btn logs-btn';
+            logsBtn.textContent = 'Logs';
+            logsBtn.addEventListener('click', () => showLogsModal(container));
+            actionsDiv.appendChild(logsBtn);
             
             actionsCell.appendChild(actionsDiv);
             row.appendChild(actionsCell);
@@ -285,38 +323,55 @@ document.addEventListener('DOMContentLoaded', () => {
     settingsForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
-        const name = (document.getElementById('container-title') as HTMLInputElement).value;
-        const description = (document.getElementById('container-description') as HTMLTextAreaElement).value;
+        const submitBtn = settingsForm.querySelector('button[type="submit"]') as HTMLButtonElement;
+        if (!submitBtn) return;
         
-        // Parse environment variables
-        
-        const containerData = {
-            name,
-            description,
-        };
-        
-        if (currentContainer) {
-            // Update existing container
-            const response = await apiCall(`/api/containers/${currentContainer.id}`, 'PUT', containerData);
+        // Disable submit button and add spinner
+        const originalBtnText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="loading"></span> Saving...';
+
+        try {
+            const name = (document.getElementById('container-title') as HTMLInputElement).value;
+            const description = (document.getElementById('container-description') as HTMLTextAreaElement).value;
             
-            if (response.error) {
-                showToast(response.error, 'error');
-            } else {
-                showToast('Container updated successfully', 'success');
-                await fetchContainers();
-                closeModal();
-            }
-        } else {
-            // Create new container
-            const response = await apiCall('/api/containers', 'POST', containerData);
+            // Parse environment variables
             
-            if (response.error) {
-                showToast(response.error, 'error');
+            const containerData = {
+                name,
+                description,
+            };
+            
+            if (currentContainer) {
+                // Update existing container
+                const response = await apiCall(`/api/containers/${currentContainer.id}`, 'PUT', containerData);
+                
+                if (response.error) {
+                    showToast(response.error, 'error');
+                } else {
+                    showToast('Container updated successfully', 'success');
+                    await fetchContainers();
+                    closeModal();
+                }
             } else {
-                showToast('Container created successfully', 'success');
-                await fetchContainers();
-                closeModal();
+                // Create new container
+                const response = await apiCall('/api/containers', 'POST', containerData);
+                
+                if (response.error) {
+                    showToast(response.error, 'error');
+                } else {
+                    showToast('Container created successfully', 'success');
+                    await fetchContainers();
+                    closeModal();
+                }
             }
+        } catch (error) {
+            showToast('An unexpected error occurred', 'error');
+            console.error('Form submission error:', error);
+        } finally {
+            // Restore submit button
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
         }
     });
     
@@ -345,4 +400,409 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial render
     fetchContainers();
+    
+    // Set up smart auto-refresh every 10 seconds
+    let previousContainers: Container[] = [];
+    
+    // Track container update status for visual feedback
+    let containerUpdateStatus: Map<number, 'new' | 'updated'> = new Map();
+    
+    async function smartRefresh() {
+        try {
+            const response = await apiCall<Container[]>('/api/containers');
+            
+            if (response.error) {
+                console.warn('Auto-refresh error:', response.error);
+                return;
+            }
+            
+            if (response && Array.isArray(response)) {
+                const newContainers = response;
+                
+                // Compare with previous state
+                const changes = checkForContainerChanges(previousContainers, newContainers);
+                
+                if (changes.hasChanges) {
+                    console.log('Container changes detected, updating UI...');
+                    containers = newContainers;
+                    previousContainers = [...newContainers]; // Store a copy
+                    
+                    // Track which containers are new or updated for visual feedback
+                    containerUpdateStatus.clear();
+                    
+                    // Create a map of old containers by ID for quick lookup
+                    const oldContainerMap = new Map<number, Container>();
+                    previousContainers.forEach(container => {
+                        oldContainerMap.set(container.id, container);
+                    });
+                    
+                    // Check each new container and mark its status
+                    newContainers.forEach(newContainer => {
+                        const oldContainer = oldContainerMap.get(newContainer.id);
+                        
+                        if (!oldContainer) {
+                            // This is a new container
+                            containerUpdateStatus.set(newContainer.id, 'new');
+                        } else if (oldContainer.status !== newContainer.status) {
+                            // This container's status has changed
+                            containerUpdateStatus.set(newContainer.id, 'updated');
+                        }
+                    });
+                    
+                    renderTable();
+                    
+                    // Show a subtle notification for updates
+                    if (changes.newContainers > 0 || changes.updatedContainers > 0) {
+                        let message = '';
+                        if (changes.newContainers > 0) {
+                            message += `${changes.newContainers} new container(s) added.`;
+                        }
+                        if (changes.updatedContainers > 0) {
+                            if (message) message += ' ';
+                            message += `${changes.updatedContainers} container(s) updated.`;
+                        }
+                        showToast(message, 'info', 3000);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Auto-refresh failed:', error);
+        }
+    }
+    
+    // Set up the smart refresh interval
+    const refreshInterval = setInterval(smartRefresh, 10000);
+    
+    // Clean up interval on page unload
+    window.addEventListener('beforeunload', () => {
+        clearInterval(refreshInterval);
+    });
+    
+    // Logs Modal Functions
+    let currentLogContainer: Container | null = null;
+    let currentLogFilename: string | null = null;
+    
+    function showLogsModal(container: Container) {
+        currentLogContainer = container;
+        
+        const logsModal = document.getElementById('logs-modal') as HTMLDivElement;
+        if (!logsModal) {
+            console.error('Logs modal not found');
+            return;
+        }
+        
+        // Show loading state
+        const logFilesList = document.getElementById('log-files-list') as HTMLDivElement;
+        const logContentViewer = document.getElementById('log-content-viewer') as HTMLDivElement;
+        
+        if (logFilesList && logContentViewer) {
+            logFilesList.innerHTML = '<p>Loading log files...</p>';
+            logContentViewer.style.display = 'none';
+        }
+        
+        logsModal.style.display = 'block';
+        
+        // Fetch available log files
+        fetchLogFiles(container.id);
+    }
+    
+    async function fetchLogFiles(containerId: number) {
+        const response = await apiCall<{files: string[]}>(`/api/containers/${containerId}/logs`);
+        
+        const logFilesList = document.getElementById('log-files-list') as HTMLDivElement;
+        const logContentViewer = document.getElementById('log-content-viewer') as HTMLDivElement;
+        
+        if (response.error) {
+            logFilesList.innerHTML = `<p class="error-message">Error loading log files: ${response.error}</p>`;
+            logContentViewer.style.display = 'none';
+            return;
+        }
+        
+        // Handle the response structure properly
+        const responseData = response as ApiResponse<{files: string[]}>;
+        console.log("Log files response data:", responseData);
+        const files = responseData.files || [];
+        
+        if (files.length === 0) {
+            logFilesList.innerHTML = '<p>No log files found in this container.</p>';
+            logContentViewer.style.display = 'none';
+            return;
+        }
+        
+        // Create log file buttons
+        logFilesList.innerHTML = '<h3>Available Log Files:</h3>';
+        const fileListContainer = document.createElement('div');
+        fileListContainer.className = 'log-file-buttons';
+        
+        files.forEach((filename: string) => {
+            const fileBtn = document.createElement('button');
+            fileBtn.className = 'log-file-btn';
+            fileBtn.textContent = filename;
+            fileBtn.addEventListener('click', () => fetchLogContent(containerId, filename));
+            fileListContainer.appendChild(fileBtn);
+        });
+        
+        logFilesList.appendChild(fileListContainer);
+        logContentViewer.style.display = 'none';
+    }
+    
+    async function fetchLogContent(containerId: number, filename: string) {
+        currentLogFilename = filename;
+        
+        const logContent = document.getElementById('log-content') as HTMLDivElement;
+        const currentLogFilenameEl = document.getElementById('current-log-filename') as HTMLHeadingElement;
+        const logContentViewer = document.getElementById('log-content-viewer') as HTMLDivElement;
+        
+        if (!logContent || !currentLogFilenameEl || !logContentViewer) {
+            console.error('Log content elements not found');
+            
+            return;
+        }
+        
+        // Show loading state
+        logContent.innerHTML = '<p>Loading log content...</p>';
+        currentLogFilenameEl.textContent = filename;
+        logContentViewer.style.display = 'block';
+        
+        const response = await apiCall<{filename: string, content: string}>(`/api/containers/${containerId}/logs/${filename}`);
+        
+        if (response.error) {
+            logContent.innerHTML = `<p class="error-message">Error loading log: ${response.error}</p>`;
+            return;
+        }
+        
+        // Handle the response structure properly
+        const responseData = response as ApiResponse<{filename: string, content: string}>;
+        const content = responseData.content || 'Log file is empty';
+        
+        // Format log content with monospace font and preserve whitespace
+        logContent.innerHTML = `<pre>${escapeHtml(content)}</pre>`;
+        
+        // Set up event listeners for action buttons
+        setupLogActionButtons(containerId, filename);
+    }
+    
+    function setupLogActionButtons(containerId: number, filename: string) {
+        const refreshBtn = document.getElementById('refresh-log-btn') as HTMLButtonElement;
+        const downloadBtn = document.getElementById('download-log-btn') as HTMLButtonElement;
+        
+        if (refreshBtn) {
+            refreshBtn.onclick = () => fetchLogContent(containerId, filename);
+        }
+        
+        if (downloadBtn) {
+            downloadBtn.onclick = () => downloadLogFile(containerId, filename);
+        }
+    }
+    
+    async function downloadLogFile(containerId: number, filename: string) {
+        const response = await apiCall<{filename: string, content: string}>(`/api/containers/${containerId}/logs/${filename}`);
+        
+        if (response.error) {
+            showToast(`Failed to download log: ${response.error}`, 'error');
+            return;
+        }
+        
+        // Handle the response structure properly
+        const responseData = response as ApiResponse<{filename: string, content: string}>;
+        const content = responseData.content || '';
+        
+        // Create download link
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showToast(`Downloaded ${filename} successfully`, 'success');
+    }
+    
+    function closeLogsModal() {
+        const logsModal = document.getElementById('logs-modal') as HTMLDivElement;
+        if (logsModal) {
+            logsModal.style.display = 'none';
+        }
+    }
+    
+    // Helper function to check for container changes
+    function checkForContainerChanges(oldContainers: Container[], newContainers: Container[]): {
+        hasChanges: boolean;
+        newContainers: number;
+        updatedContainers: number;
+    } {
+        let newContainerCount = 0;
+        let updatedContainerCount = 0;
+        
+        // Create a map of old containers by ID for quick lookup
+        const oldContainerMap = new Map<number, Container>();
+        oldContainers.forEach(container => {
+            oldContainerMap.set(container.id, container);
+        });
+        
+        // Check each new container
+        newContainers.forEach(newContainer => {
+            const oldContainer = oldContainerMap.get(newContainer.id);
+            
+            if (!oldContainer) {
+                // This is a new container
+                newContainerCount++;
+            } else if (oldContainer.status !== newContainer.status) {
+                // This container's status has changed
+                updatedContainerCount++;
+            }
+            // Note: We don't remove the old container from the map here
+            // because we want to detect all changes in one pass
+        });
+        
+        const hasChanges = newContainerCount > 0 || updatedContainerCount > 0;
+        
+        return {
+            hasChanges,
+            newContainers: newContainerCount,
+            updatedContainers: updatedContainerCount
+        };
+    }
+    
+    // Helper function to escape HTML for safe display
+    function escapeHtml(text: string): string {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Container Info Modal Functions
+    function showContainerInfoModal(container: Container) {
+        const modal = document.getElementById('container-info-modal') as HTMLDivElement;
+        if (!modal) {
+            console.error('Container info modal not found');
+            return;
+        }
+        
+        // Set modal content
+        document.getElementById('container-info-name')!.textContent = container.name;
+        document.getElementById('container-info-status')!.textContent = container.status;
+        
+        // Folder path
+        const folderPathEl = document.getElementById('container-info-folder-path')!;
+        folderPathEl.textContent = container.folder_path || 'N/A';
+        
+        // Port - extract last 4 digits if ports exist
+        const portEl = document.getElementById('container-info-port')!;
+        if (container.ports) {
+            const ports = container.ports.split('_');
+            if (ports.length > 0) {
+                const lastPort = ports[ports.length - 1];
+                portEl.textContent = lastPort.length > 4 ? lastPort.slice(-4) : lastPort;
+            } else {
+                portEl.textContent = container.ports;
+            }
+        } else {
+            portEl.textContent = 'N/A';
+        }
+        
+        // Public URL
+        const urlEl = document.getElementById('container-info-url') as HTMLAnchorElement;
+        if (container.public_url) {
+            urlEl.href = container.public_url;
+            urlEl.textContent = container.public_url;
+        } else {
+            urlEl.href = '#';
+            urlEl.textContent = 'N/A';
+        }
+        
+        // Instructions
+        const instructionsEl = document.getElementById('container-info-instructions')!;
+        if (container.instructions) {
+            // Format instructions with markdown-like formatting
+            instructionsEl.innerHTML = formatInstructions(container.instructions);
+        } else {
+            instructionsEl.innerHTML = '<p>No instructions available.</p>';
+        }
+        
+        modal.style.display = 'block';
+    }
+    
+    function formatInstructions(text: string): string {
+        // Simple markdown formatting
+        let formatted = text
+            // Headers
+            .replace(/^#\s+(.*$)/gm, '<h3>$1</h3>')
+            .replace(/^##\s+(.*$)/gm, '<h4>$1</h4>')
+            // Lists
+            .replace(/^\d+\)\s+(.*$)/gm, '<li>$1</li>')
+            .replace(/^\*\s+(.*$)/gm, '<li>$1</li>')
+            .replace(/^\-\s+(.*$)/gm, '<li>$1</li>')
+            // Bold
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/___(.*?)___/g, '<strong>$1</strong>')
+            // Italic
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/_(.*?)_/g, '<em>$1</em>')
+            // Links
+            .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>')
+            // Code blocks
+            .replace(/```(.*?)```/gs, '<pre><code>$1</code></pre>')
+            .replace(/`(.*?)`/g, '<code>$1</code>');
+        
+        // Wrap list items in ul tags
+        const lines = formatted.split('\n');
+        let inList = false;
+        let result = '';
+        
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].startsWith('<li>') && !inList) {
+                result += '<ul>';
+                inList = true;
+            } else if (!lines[i].startsWith('<li>') && inList) {
+                result += '</ul>';
+                inList = false;
+            }
+            result += lines[i] + '\n';
+        }
+        
+        if (inList) {
+            result += '</ul>';
+        }
+        
+        return result;
+    }
+    
+    function closeContainerInfoModal() {
+        const modal = document.getElementById('container-info-modal') as HTMLDivElement;
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+    
+    // Add event listener for container info modal close button
+    const containerInfoModal = document.getElementById('container-info-modal') as HTMLDivElement;
+    const containerInfoCloseBtn = document.querySelector('#container-info-modal .close') as HTMLSpanElement;
+    
+    if (containerInfoCloseBtn) {
+        containerInfoCloseBtn.addEventListener('click', closeContainerInfoModal);
+    }
+    
+    window.addEventListener('click', (event) => {
+        if (event.target === containerInfoModal) {
+            closeContainerInfoModal();
+        }
+    });
+    
+    // Add event listener for logs modal close button
+    const logsModal = document.getElementById('logs-modal') as HTMLDivElement;
+    const logsCloseBtn = document.querySelector('#logs-modal .close') as HTMLSpanElement;
+    
+    if (logsCloseBtn) {
+        logsCloseBtn.addEventListener('click', closeLogsModal);
+    }
+    
+    window.addEventListener('click', (event) => {
+        if (event.target === logsModal) {
+            closeLogsModal();
+        }
+    });
 });
