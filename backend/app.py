@@ -513,7 +513,7 @@ def restart_container(container_id):
     # Use custom restart script to restart container
     output, error = execute_container_script(
         RESTART_SCRIPT, container.folder_path)
-    if error:
+    if error or not output:
         return jsonify({'error': f'Failed to restart container: {error}'}), 500
 
     # Update container details from restart output

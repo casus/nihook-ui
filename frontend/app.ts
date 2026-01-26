@@ -1,3 +1,7 @@
+declare const marked: {
+    parse: (markdown: string) => string;
+};
+
 // Container interface
 interface Container {
     id: number;
@@ -719,6 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (container.instructions) {
             // Format instructions with markdown-like formatting
             instructionsEl.innerHTML = formatInstructions(container.instructions);
+            // instructionsEl.innerHTML = container.instructions;
         } else {
             instructionsEl.innerHTML = '<p>No instructions available.</p>';
         }
@@ -727,48 +732,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function formatInstructions(text: string): string {
-        // Simple markdown formatting
-        let formatted = text
-            // Headers
-            .replace(/^#\s+(.*$)/gm, '<h3>$1</h3>')
-            .replace(/^##\s+(.*$)/gm, '<h4>$1</h4>')
-            // Lists
-            .replace(/^\d+\)\s+(.*$)/gm, '<li>$1</li>')
-            .replace(/^\*\s+(.*$)/gm, '<li>$1</li>')
-            .replace(/^\-\s+(.*$)/gm, '<li>$1</li>')
-            // Bold
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/___(.*?)___/g, '<strong>$1</strong>')
-            // Italic
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/_(.*?)_/g, '<em>$1</em>')
-            // Links
-            .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>')
-            // Code blocks
-            .replace(/```(.*?)```/gs, '<pre><code>$1</code></pre>')
-            .replace(/`(.*?)`/g, '<code>$1</code>');
-        
-        // Wrap list items in ul tags
-        const lines = formatted.split('\n');
-        let inList = false;
-        let result = '';
-        
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].startsWith('<li>') && !inList) {
-                result += '<ul>';
-                inList = true;
-            } else if (!lines[i].startsWith('<li>') && inList) {
-                result += '</ul>';
-                inList = false;
-            }
-            result += lines[i] + '\n';
+        if (typeof marked !== 'undefined') {
+            return marked.parse(text);
         }
-        
-        if (inList) {
-            result += '</ul>';
-        }
-        
-        return result;
+        return text;
     }
     
     function closeContainerInfoModal() {

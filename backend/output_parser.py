@@ -35,13 +35,17 @@ def parse_spinup_output(output: str, nihook_folder: str) -> Dict[str, Optional[s
     url_patterns = [
         r"NocoDB at (https?://[^\s]+)",
         r"Webhook at (https?://[^\s]+)",
-        r"(https?://[^\s]+/\d{4})\b"
+        # IP based URLs like NocoDB at 127.0.0.1:8080
+        r"NocoDB at (\d{1,3}(?:\.\d{1,3}){3}:\d+)",
+        r"Webhook at (\d{1,3}(?:\.\d{1,3}){3}:\d+)",
     ]
     for pattern in url_patterns:
         url_match = re.search(pattern, output)
         if url_match:
-            # TODO: parse also IP based URLs 
             public_url = url_match.group(1)
+            # Ensure URL has protocol if missing (for IP addresses)
+            if not public_url.startswith('http'):
+                public_url = f"http://{public_url}"
             break
 
     # Extract instructions - look for the entire instructions block
@@ -67,6 +71,8 @@ def parse_spinup_output(output: str, nihook_folder: str) -> Dict[str, Optional[s
         url_patterns = [
             r"NocoDB at https?://[^\s]+",
             r"Webhook at https?://[^\s]+",
+            r"NocoDB at \d{1,3}(?:\.\d{1,3}){3}:\d+",
+            r"Webhook at \d{1,3}(?:\.\d{1,3}){3}:\d+",
             r"🟢 NocoDB and webhook servers running"
         ]
         for pattern in url_patterns:
