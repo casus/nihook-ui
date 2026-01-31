@@ -1,25 +1,7 @@
+
 declare const marked: {
     parse: (markdown: string) => string;
 };
-
-// Container interface
-interface Container {
-    id: number;
-    name: string;
-    status: string;
-    description: string;
-    folder_path?: string;
-    podman_id?: string;
-    ports?: string;
-    public_url?: string;
-    instructions?: string;
-}
-
-// API Response interfaces
-type ApiResponse<T> = T & {
-    error?: string;
-    message?: string;
-}
 
 interface AuthResponse {
     access_token: string;

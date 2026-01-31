@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schema Builder</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-container">
+            <h1>Schema Builder</h1>
+            <div class="auth-info" id="auth-info">
+                <span id="username-display"></span>
+                <button id="back-btn" class="back-btn">Back to Containers</button>
+                <button id="logout-btn" class="logout-btn">Logout</button>
+            </div>
+        </div>
+    </nav>
+    <div class="main-content">
+        <div class="schema-builder-container">
+            <div class="schema-sidebar">
+                <h2>Your Schemas</h2>
+                <button id="create-schema-btn" class="create-btn">Create New Schema</button>
+                <div id="schemas-list">
+                    <!-- Schema items will be added here -->
+                </div>
+            </div>
+            
+            <div class="schema-main-content">
+                <div id="schema-editor" class="schema-editor">
+                    <div class="editor-header">
+                        <h2 id="schema-title">Select a Schema</h2>
+                        <div class="schema-actions">
+                            <button id="create-table-btn" class="action-btn create-table-btn" disabled>Create Table</button>
+                            <button id="save-schema-btn" class="action-btn save-btn" disabled>Save</button>
+                            <button id="download-schema-btn" class="action-btn download-btn" disabled>Download</button>
+                            <button id="delete-schema-btn" class="action-btn delete-btn" disabled>Delete</button>
+                        </div>
+                    </div>
+                    
+                    <div class="schema-form" id="schema-form" style="display: none;">
+                        <div class="form-group">
+                            <label for="schema-name">Schema Name:</label>
+                            <input type="text" id="schema-name" name="name" placeholder="e.g., TopoHSE" required>
+                        </div>
+                    </div>
+                    
+                    <div class="fields-container" id="fields-container" style="display: none;">
+                        <div class="fields-header">
+                            <h3>Fields</h3>
+                            <button id="add-field-btn" class="action-btn">Add Field</button>
+                        </div>
+                        <div id="fields-list">
+                            <!-- Fields will be added here -->
+                        </div>
+                    </div>
+                    
+                    <div class="empty-state" id="empty-state">
+                        <p>Select a schema from the sidebar or create a new one to get started.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="schema-preview">
+                <h3>JSON Preview</h3>
+                <pre id="json-preview"><code>{}</code></pre>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Field Modal -->
+    <div id="field-modal" class="modal">
+        <div class="modal-content field-modal-content">
+            <span class="close">&times;</span>
+            <h2 id="field-modal-title">Add Field</h2>
+            <form id="field-form">
+                <input type="hidden" id="field-id">
+                <input type="hidden" id="parent-path">
+                
+                <div class="form-group">
+                    <label for="field-name">Field Name:</label>
+                    <input type="text" id="field-name" name="name" placeholder="e.g., name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="field-type">Field Type:</label>
+                    <select id="field-type" name="type" required>
+                        <option value="string">String</option>
+                        <option value="integer">Integer</option>
+                        <option value="number">Number</option>
+                        <option value="boolean">Boolean</option>
+                        <option value="array">Array</option>
+                        <option value="object">Object</option>
+                        <option value="null">Null</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="string-subtype-group" style="display: none;">
+                    <label for="string-subtype">String Subtype:</label>
+                    <select id="string-subtype" name="string_subtype">
+                        <option value="">(None - Plain String)</option>
+                        <option value="DateTime">DateTime</option>
+                        <option value="Duration">Duration</option>
+                        <option value="URL">URL</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="array-item-type-group" style="display: none;">
+                    <label for="array-item-type">Array Item Type:</label>
+                    <select id="array-item-type" name="array_item_type">
+                        <option value="string">String</option>
+                        <option value="integer">Integer</option>
+                        <option value="number">Number</option>
+                        <option value="boolean">Boolean</option>
+                        <option value="null">Null</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="field-required">
+                        Required
+                    </label>
+                </div>
+                
+                <button type="submit">Save Field</button>
+                <button type="button" class="cancel-btn" id="cancel-field-btn">Cancel</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Create Table Modal -->
+    <div id="create-table-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-create-table close">&times;</span>
+            <h2>Create New Table</h2>
+            <form id="create-table-form">
+                <div class="form-group">
+                    <label for="container-select">Select Container:</label>
+                    <select id="container-select" name="container_id" required>
+                        <option value="">Select a container...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Base options:</label>
+                    <div class="radio-group" style="display: flex; gap: 15px; margin-bottom: 10px;">
+                        <label>
+                            <input type="radio" name="base-option" value="existing" checked> Existing Base
+                        </label>
+                        <label>
+                            <input type="radio" name="base-option" value="new"> New Base
+                        </label>
+                    </div>
+                </div>
+                
+                <div id="existing-base-group" class="form-group">
+                    <label for="base-id">Base ID:</label>
+                    <input type="text" id="base-id" name="base_id" placeholder="Enter existing base ID">
+                </div>
+                
+                <div id="new-base-group" class="form-group" style="display: none;">
+                    <label for="new-base-name">New Base Name:</label>
+                    <input type="text" id="new-base-name" name="new_base_name" placeholder="Enter new base name">
+                </div>
+                
+                <div class="form-group">
+                    <label for="table-name">Table Name:</label>
+                    <input type="text" id="table-name" name="table_name" placeholder="Currently selected table name" required>
+                </div>
+                
+                <div class="form-actions" style="margin-top: 20px;">
+                    <button type="button" class="cancel-btn" id="cancel-create-table-btn">Cancel</button>
+                    <button type="submit" class="submit-btn" id="confirm-create-table-btn">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script src="./out/schema-builder.js"></script>
+    <script>
+        // Check authentication status on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const token = localStorage.getItem('access_token');
+            const username = localStorage.getItem('username');
+            
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+            
+            document.getElementById('username-display').textContent = `Logged in as: ${username}`;
+            
+            // Set up back button
+            document.getElementById('back-btn').addEventListener('click', function() {
+                window.location.href = '/';
+            });
+            
+            // Set up logout button
+            document.getElementById('logout-btn').addEventListener('click', async function() {
+                try {
+                    const response = await fetch('/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        localStorage.removeItem('access_token');
+                        localStorage.removeItem('user_id');
+                        localStorage.removeItem('username');
+                        window.location.href = '/login';
+                    }
+                } catch (error) {
+                    console.error('Logout error:', error);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
