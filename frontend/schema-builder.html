@@ -21,7 +21,10 @@
         <div class="schema-builder-container">
             <div class="schema-sidebar">
                 <h2>Your Schemas</h2>
-                <button id="create-schema-btn" class="create-btn">Create New Schema</button>
+                <div class="sidebar-actions">
+                    <button id="create-schema-btn" class="create-btn">Create New Schema</button>
+                    <button id="import-schema-btn" class="action-btn import-btn">Import Schema</button>
+                </div>
                 <div id="schemas-list">
                     <!-- Schema items will be added here -->
                 </div>
@@ -65,6 +68,9 @@
             <div class="schema-preview">
                 <h3>JSON Preview</h3>
                 <pre id="json-preview"><code>{}</code></pre>
+                
+                <h3 style="margin-top: 20px;">Example Preview</h3>
+                <pre id="example-preview"><code>{}</code></pre>
             </div>
         </div>
     </div>
@@ -173,6 +179,47 @@
                 <div class="form-actions" style="margin-top: 20px;">
                     <button type="button" class="cancel-btn" id="cancel-create-table-btn">Cancel</button>
                     <button type="submit" class="submit-btn" id="confirm-create-table-btn">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Import Schema Modal -->
+    <div id="import-schema-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-import-schema close">&times;</span>
+            <h2>Import Schema</h2>
+            <form id="import-schema-form">
+                <div class="form-group">
+                    <label for="import-name">Schema Name:</label>
+                    <input type="text" id="import-name" name="name" placeholder="e.g., Imported Schema" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Import Method:</label>
+                    <div class="radio-group" style="display: flex; gap: 15px; margin-bottom: 10px;">
+                        <label>
+                            <input type="radio" name="import-method" value="file" checked> Upload File
+                        </label>
+                        <label>
+                            <input type="radio" name="import-method" value="paste"> Paste JSON
+                        </label>
+                    </div>
+                </div>
+
+                <div id="import-file-group" class="form-group">
+                    <label for="import-file">Upload JSON File:</label>
+                    <input type="file" id="import-file" accept=".json">
+                </div>
+
+                <div id="import-paste-group" class="form-group" style="display: none;">
+                    <label for="import-json">Paste JSON Content:</label>
+                    <textarea id="import-json" rows="10" placeholder='{"$schema": "...", "type": "object", ...}' style="width: 100%; font-family: monospace;"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="cancel-btn" id="cancel-import-btn">Cancel</button>
+                    <button type="submit" class="submit-btn" id="confirm-import-btn">Import</button>
                 </div>
             </form>
         </div>

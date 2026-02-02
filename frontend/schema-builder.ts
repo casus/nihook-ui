@@ -20,6 +20,7 @@ interface Schema {
     id?: number;
     name: string;
     schema_definition: SchemaDefinition;
+    example?: any;
     user_id?: number;
     created_at?: string;
     updated_at?: string;
@@ -36,6 +37,9 @@ let createTableModal: HTMLDivElement;
 let createTableForm: HTMLFormElement;
 let cancelCreateTableBtn: HTMLButtonElement;
 let containerSelect: HTMLSelectElement;
+let importModal: HTMLDivElement;
+let importForm: HTMLFormElement;
+let cancelImportBtn: HTMLButtonElement;
 
 // Field types that support subfields (object/array)
 const COMPLEX_TYPES = ['object', 'array'];
@@ -52,6 +56,10 @@ document.addEventListener('DOMContentLoaded', () => {
     cancelCreateTableBtn = document.getElementById('cancel-create-table-btn') as HTMLButtonElement;
     containerSelect = document.getElementById('container-select') as HTMLSelectElement;
 
+    importModal = document.getElementById('import-schema-modal') as HTMLDivElement;
+    importForm = document.getElementById('import-schema-form') as HTMLFormElement;
+    cancelImportBtn = document.getElementById('cancel-import-btn') as HTMLButtonElement;
+
     // Initialize
     fetchSchemas();
     setupEventListeners();
@@ -66,9 +74,12 @@ function setupEventListeners(): void {
     const fieldModalClose = document.querySelector('#field-modal .close') as HTMLSpanElement;
     const createTableBtn = document.getElementById('create-table-btn') as HTMLButtonElement;
     const createTableModalClose = document.querySelector('#create-table-modal .close-create-table') as HTMLSpanElement;
+    const importSchemaBtn = document.getElementById('import-schema-btn') as HTMLButtonElement;
+    const importModalClose = document.querySelector('#import-schema-modal .close-import-schema') as HTMLSpanElement;
     const fieldTypeSelect = document.getElementById('field-type') as HTMLSelectElement;
     
     createSchemaBtn.addEventListener('click', createNewSchema);
+    importSchemaBtn.addEventListener('click', showImportModal);
     saveSchemaBtn.addEventListener('click', saveCurrentSchema);
     downloadSchemaBtn.addEventListener('click', downloadCurrentSchema);
     deleteSchemaBtn.addEventListener('click', deleteCurrentSchema);
@@ -81,10 +92,20 @@ function setupEventListeners(): void {
     createTableModalClose.addEventListener('click', closeCreateTableModal);
     createTableForm.addEventListener('submit', handleCreateTableSubmit);
 
+    importModalClose.addEventListener('click', closeImportModal);
+    cancelImportBtn.addEventListener('click', closeImportModal);
+    importForm.addEventListener('submit', handleImportSubmit);
+
     // Radio button logic for base selection
     const baseOptionRadios = document.querySelectorAll('input[name="base-option"]');
     baseOptionRadios.forEach(radio => {
         radio.addEventListener('change', toggleBaseOptions);
+    });
+
+    // Radio button logic for import method
+    const importMethodRadios = document.querySelectorAll('input[name="import-method"]');
+    importMethodRadios.forEach(radio => {
+        radio.addEventListener('change', toggleImportMethod);
     });
 
     fieldForm.addEventListener('submit', handleFieldSubmit);
@@ -96,6 +117,9 @@ function setupEventListeners(): void {
         }
         if (event.target === createTableModal) {
             closeCreateTableModal();
+        }
+        if (event.target === importModal) {
+            closeImportModal();
         }
     });
 }
@@ -177,6 +201,8 @@ function renderSchemasList(): void {
     schemas.forEach(schema => {
         const schemaItem = document.createElement('div');
         schemaItem.className = 'schema-item';
+        schemaItem.style.cursor = 'pointer';
+        schemaItem.addEventListener('click', () => loadSchema(schema));
         
         const name = document.createElement('h3');
         name.textContent = schema.name;
@@ -185,19 +211,8 @@ function renderSchemasList(): void {
         meta.className = 'schema-meta';
         meta.textContent = `${Object.keys(schema.schema_definition.properties).length} fields`;
         
-        const actions = document.createElement('div');
-        actions.className = 'schema-item-actions';
-        
-        const editBtn = document.createElement('button');
-        editBtn.className = 'action-btn small-btn';
-        editBtn.textContent = 'Edit';
-        editBtn.addEventListener('click', () => loadSchema(schema));
-        
-        actions.appendChild(editBtn);
-        
         schemaItem.appendChild(name);
         schemaItem.appendChild(meta);
-        schemaItem.appendChild(actions);
         
         schemasList.appendChild(schemaItem);
     });
@@ -507,7 +522,7 @@ function handleFieldTypeChange(event: Event): void {
     }
 }
 
-function handleFieldSubmit(event: Event): void {
+async function handleFieldSubmit(event: Event): Promise<void> {
     event.preventDefault();
     
     if (!currentSchema) return;
@@ -590,10 +605,12 @@ function handleFieldSubmit(event: Event): void {
     closeFieldModal();
     renderFields();
     updateJsonPreview();
-    showToast('Field saved successfully', 'success');
+    
+    // Auto-save to server
+    await saveCurrentSchema();
 }
 
-function deleteField(fieldName: string, path: string = ''): void {
+async function deleteField(fieldName: string, path: string = ''): Promise<void> {
     if (!confirm('Are you sure you want to delete this field?')) return;
     
     if (!currentSchema) return;
@@ -612,7 +629,9 @@ function deleteField(fieldName: string, path: string = ''): void {
         
         renderFields();
         updateJsonPreview();
-        showToast('Field deleted successfully', 'success');
+        
+        // Auto-save to server
+        await saveCurrentSchema();
     }
 }
 
@@ -652,6 +671,10 @@ async function saveCurrentSchema(): Promise<void> {
             const savedSchema = response as Schema;
             currentSchema.id = savedSchema.id;
             currentSchema.name = savedSchema.name;
+            currentSchema.schema_definition = savedSchema.schema_definition;
+            currentSchema.example = savedSchema.example;
+            currentSchema.updated_at = savedSchema.updated_at;
+            
             showToast('Schema saved successfully', 'success');
             await fetchSchemas();
             updateSchemaEditor();
@@ -838,7 +861,7 @@ async function handleCreateTableSubmit(e: Event): Promise<void> {
     submitBtn.disabled = true;
     
     try {
-        const response = await apiCall('/api/create-table', 'POST', {
+        const response = await apiCall('/api/schemas/create-table', 'POST', {
             container_id: containerId,
             base_id: baseOption === 'existing' ? baseId : null,
             new_base_name: baseOption === 'new' ? newBaseName : null,
@@ -865,10 +888,19 @@ function updateJsonPreview(): void {
     const jsonPreview = document.getElementById('json-preview') as HTMLPreElement;
     const codeElement = jsonPreview.querySelector('code') as HTMLElement;
     
+    const examplePreview = document.getElementById('example-preview') as HTMLPreElement;
+    const exampleCodeElement = examplePreview ? examplePreview.querySelector('code') as HTMLElement : null;
+
     if (currentSchema) {
         codeElement.textContent = JSON.stringify(currentSchema.schema_definition, null, 2);
+        if (exampleCodeElement) {
+            exampleCodeElement.textContent = currentSchema.example ? JSON.stringify(currentSchema.example, null, 2) : '{}';
+        }
     } else {
         codeElement.textContent = '{}';
+        if (exampleCodeElement) {
+            exampleCodeElement.textContent = '{}';
+        }
     }
 }
 
@@ -895,4 +927,121 @@ function showToast(message: string, type: string = 'info'): void {
             }
         }, { once: true });
     }, 3000);
+}
+
+function showImportModal(): void {
+    importForm.reset();
+    toggleImportMethod(); // Set initial state
+    importModal.style.display = 'block';
+}
+
+function closeImportModal(): void {
+    importModal.style.display = 'none';
+}
+
+function toggleImportMethod(): void {
+    const fileGroup = document.getElementById('import-file-group') as HTMLDivElement;
+    const pasteGroup = document.getElementById('import-paste-group') as HTMLDivElement;
+    const fileRadio = document.querySelector('input[name="import-method"][value="file"]') as HTMLInputElement;
+    
+    if (fileRadio.checked) {
+        fileGroup.style.display = 'block';
+        pasteGroup.style.display = 'none';
+        const fileInput = document.getElementById('import-file') as HTMLInputElement;
+        fileInput.required = true;
+        const jsonInput = document.getElementById('import-json') as HTMLTextAreaElement;
+        jsonInput.required = false;
+    } else {
+        fileGroup.style.display = 'none';
+        pasteGroup.style.display = 'block';
+        const fileInput = document.getElementById('import-file') as HTMLInputElement;
+        fileInput.required = false;
+        const jsonInput = document.getElementById('import-json') as HTMLTextAreaElement;
+        jsonInput.required = true;
+    }
+}
+
+async function handleImportSubmit(e: Event): Promise<void> {
+    e.preventDefault();
+    
+    const formData = new FormData(importForm);
+    const name = formData.get('name') as string;
+    const importMethod = formData.get('import-method');
+    
+    if (!name) {
+        showToast('Schema name is required', 'error');
+        return;
+    }
+    
+    const submitBtn = document.getElementById('confirm-import-btn') as HTMLButtonElement;
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Importing...';
+    submitBtn.disabled = true;
+    
+    let schemaJsonStr = '';
+    
+    try {
+        if (importMethod === 'file') {
+            const fileInput = document.getElementById('import-file') as HTMLInputElement;
+            if (fileInput.files && fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                schemaJsonStr = await readFileAsText(file);
+            } else {
+                showToast('Please select a file', 'error');
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+                return;
+            }
+        } else {
+            const jsonTextarea = document.getElementById('import-json') as HTMLTextAreaElement;
+            schemaJsonStr = jsonTextarea.value.trim();
+        }
+        
+        // Parse and Validate JSON
+        let schemaDefinition: any;
+        try {
+            schemaDefinition = JSON.parse(schemaJsonStr);
+        } catch (parseError) {
+             showToast('Invalid JSON content', 'error');
+             console.error(parseError);
+             return;
+        }
+        
+        // Basic schema validation
+        if (!schemaDefinition || typeof schemaDefinition !== 'object') {
+             showToast('JSON must be an object', 'error');
+             return;
+        }
+
+        const response = await apiCall('/api/schemas', 'POST', {
+            name: name,
+            schema_definition: schemaDefinition
+        });
+        
+        if (response.error) {
+            showToast(response.error, 'error');
+        } else {
+            showToast('Schema imported successfully', 'success');
+            closeImportModal();
+            await fetchSchemas();
+            // Automatically select the new schema (assuming it's the last one or searching by name)
+            // Just reloading the list for now
+        }
+        
+    } catch (error) {
+        console.error('Import error:', error);
+        showToast('An error occurred during import', 'error');
+    } finally {
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+    }
+}
+
+function readFileAsText(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.onerror = (e) => reject(e);
+        reader.readAsText(file);
+    });
 }

@@ -1,222 +1,166 @@
 # Container Management System
 
-A full-stack web application for managing Podman containers on remote VMs with user authentication and authorization.
-
-## Features
-
-- **User Management**: Registration, login, and JWT authentication
-- **Container Management**: Create, start, stop, restart, and delete Podman containers
-- **Remote VM Integration**: Execute Podman commands on remote servers via SSH
-- **Responsive UI**: Modern web interface with real-time status updates
-- **Environment Configuration**: Easy setup with `.env` files
-
-## Architecture
-
-```
-┌───────────────────────────────────────────────────────────────┐
-│                        Container Management System              │
-├─────────────────┬─────────────────┬─────────────────┬─────────────┤
-│    Frontend     │     Backend     │     Database    │   Remote    │
-│  (HTML/CSS/JS)  │    (Flask)      │   (SQLite)      │    VM      │
-└─────────────────┴─────────────────┴─────────────────┴─────────────┘
-                                      │
-                                      ▼
-┌───────────────────────────────────────────────────────────────┐
-│                        Podman Container Engine                 │
-└───────────────────────────────────────────────────────────────┘
-```
-
 ## Project Structure
 
 ```
-container-manager/
-├── backend/
-│   ├── app.py                  # Flask application
-│   ├── config.py               # Configuration
-│   ├── requirements.txt        # Python dependencies
-│   ├── .env.example            # Example environment file
-│   └── containers.db           # SQLite database (auto-created)
-│
-├── frontend/
-│   ├── index.html              # Main application page
-│   ├── login.html              # Login page
-│   ├── register.html           # Registration page
-│   ├── styles.css              # CSS styles
-│   ├── app.ts                  # TypeScript source
-│   └── app.js                  # Compiled JavaScript
-│
-├── .env                        # Environment configuration
-└── README.md                   # This file
+nihook-ui/
+├── backend/                  # Python/Flask Backend
+│   ├── api/                 # API Routes (Blueprints)
+│   ├── auth/                # Auth logic & JWT callbacks
+│   ├── models/              # SQLAlchemy Database Models
+│   ├── services/            # Business Logic (SSH, etc.)
+│   ├── web/                 # Frontend serving blueprint
+│   ├── __init__.py          # Application Factory
+│   ├── config.py            # Application Configuration
+│   ├── extensions.py        # Flask Extensions (DB, JWT, Migrate)
+│   └── requirements.txt     # Backend Dependencies
+├── frontend/                # Frontend Source
+│   ├── app.ts               # Main TypeScript logic
+│   ├── schema-builder.ts    # Schema builder logic
+│   ├── styles.css           # Global styles
+│   └── *.html               # View templates
+├── migrations/              # Database Migrations (Alembic)
+├── instance/                # Instance-specific files (DB)
+├── run.py                   # Application Entry Point
+├── package.json             # Frontend Dependencies & Scripts
+└── tsconfig.json            # TypeScript Configuration
 ```
 
-## Setup Instructions
+## Setup & Installation
 
 ### Prerequisites
 
 - Python 3.8+
-- Node.js (for TypeScript compilation)
-- Podman installed on remote VM
-- SSH access to remote VM
+- Node.js & npm
+- Podman (remote or local)
 
-### Installation
+### 1. Backend Setup
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-repo/container-manager.git
-   cd container-manager
-   ```
+Create a virtual environment and install dependencies:
 
-2. **Set up Python environment**
-   ```bash
-   cd backend
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 
-3. **Configure environment**
-   ```bash
-   cp backend/.env.example .env
-   # Edit .env with your configuration
-   ```
-
-4. **Compile TypeScript**
-   ```bash
-   # Install dependencies (first time)
-   npm install
-   
-   # One-time build
-   npm run build
-   ```
-
-5. **Run the application**
-   ```bash
-   cd backend
-   python app.py
-   ```
-
-6. **Access the application**
-   Open your browser to `http://localhost:5000`
-
-## Configuration
-
-Edit the `.env` file to configure your application:
-
-```env
-# Flask Configuration
-FLASK_ENV=development
-FLASK_DEBUG=1
-
-# JWT Configuration
-JWT_SECRET_KEY=your-super-secret-key-here-change-in-production
-JWT_ACCESS_TOKEN_EXPIRES=3600  # 1 hour
-
-# SSH Configuration for Podman remote server
-SSH_HOSTNAME=your-remote-server-ip-or-hostname
-SSH_PORT=22
-SSH_USERNAME=root  # or your username
-SSH_PASSWORD=your-ssh-password  # leave empty if using key
-SSH_KEY_FILE=/path/to/your/private/key  # e.g., ~/.ssh/id_rsa
-
-# Database Configuration
-DATABASE_URL=sqlite:///containers.db
+# Install dependencies
+pip install -r backend/requirements.txt
+# Note: Ensure Flask-Migrate is installed if missing
+pip install Flask-Migrate
 ```
 
-### SSH Configuration Options
+### 2. Frontend Setup
 
-You can use either:
-- **Password authentication**: Set `SSH_PASSWORD` and leave `SSH_KEY_FILE` empty
-- **Key-based authentication**: Set `SSH_KEY_FILE` to your private key path and leave `SSH_PASSWORD` empty
+Install TypeScript dependencies and compile the frontend code:
 
-### Automatic javascript build (debugging only):
 ```bash
-# Install dependencies (first time)
+# Install dependencies
 npm install
 
-# Watch and auto-compile on save
+# Build the frontend (compiles TS -> JS)
+npm run build
+
+# Or run in watch mode during development
 npm run watch
 ```
 
-## Usage
+### 3. Application Configuration
 
-### User Management
+Copy the example environment file to `.env`:
 
-1. **Register**: Create a new account at `/register`
-2. **Login**: Authenticate at `/login`
-3. **Logout**: Click the logout button in the navigation
+```bash
+cp .env.example .env
+```
 
-### Container Management
+Open `.env` and configure your settings (SSH credentials, secret keys, etc.):
 
-1. **View Containers**: See all your containers with their status
-2. **Create Container**: Click "Create New Container" and fill in the details
-3. **Manage Container**: Use the action buttons to start, stop, restart, or delete
-4. **Edit Settings**: Click the gear icon to modify container configuration
+```ini
+# Flask
+FLASK_DEBUG=True
+DATABASE_URL=sqlite:///containers.db
+JWT_SECRET_KEY=your-secret-key
 
-### Container Configuration
+# SSH / Podman Configuration
+SSH_HOSTNAME=remote-host.com
+SSH_PORT=22
+SSH_USERNAME=root
+SSH_KEY_FILE=/path/to/private/key
+# OR
+SSH_PASSWORD=your-password
 
-When creating or editing a container, you can specify:
+# Application Paths
+NIHOOK_FOLDER=/path/to/nihook
+CONTAINER_SCRIPTS_DIR=/path/to/nihook/scripts
+```
 
-- **Name**: Container name (required)
-- **Description**: Optional description
-- **Image**: Docker/Podman image (default: alpine)
-- **Ports**: Port mappings (e.g., "8080:80, 443:443")
-- **Volumes**: Volume mappings (e.g., "/host:/container")
-- **Environment Variables**: Key-value pairs for environment variables
+### 4. Database Setup
+
+Initialize the database using migrations:
+
+```bash
+# Apply existing migrations
+flask db upgrade
+
+# If you make changes to models:
+# flask db migrate -m "Description of change"
+# flask db upgrade
+```
+
+### 5. Running the Application
+
+Start the Flask development server:
+
+```bash
+python app.py
+```
+
+The application will be available at `http://localhost:5000`.
+
 
 ## API Endpoints
 
 ### Authentication
 
-- `GET /login` - Login page
-- `POST /login` - Authenticate user
-- `GET /register` - Registration page
-- `POST /register` - Create new user
+- `GET/POST /login` - Login page & authentication
+- `GET/POST /register` - Registration page & user creation
 - `POST /logout` - Logout current user
 
-### Containers
+### Containers (`/api/containers`)
 
-- `GET /api/containers` - List all containers for current user
-- `POST /api/containers` - Create new container
-- `GET /api/containers/<id>` - Get container details
-- `PUT /api/containers/<id>` - Update container
-- `POST /api/containers/<id>/start` - Start container
-- `POST /api/containers/<id>/stop` - Stop container
-- `POST /api/containers/<id>/restart` - Restart container
-- `POST /api/containers/<id>/delete` - Delete container
+- `GET /` - List all containers
+- `POST /` - Create new container
+- `GET /<id>` - Get container details
+- `PUT /<id>` - Update container
+- `POST /<id>/start` - Start container
+- `POST /<id>/stop` - Stop container
+- `POST /<id>/restart` - Restart container
+- `POST /<id>/delete` - Delete container
+- `GET /<id>/logs` - List logs
+- `GET /<id>/logs/<filename>` - View log file
+
+### Schemas (`/api/schemas`)
+
+- `GET /` - List all schemas
+- `POST /` - Create new schema
+- `GET /<id>` - Get schema details
+- `PUT /<id>` - Update schema
+- `DELETE /<id>` - Delete schema
+- `GET /<id>/download` - Download schema JSON
+- `POST /create-table` - Create table from schema
 
 ## Security
 
 - **JWT Authentication**: Secure API endpoints with JSON Web Tokens
-- **Password Hashing**: User passwords are hashed using Werkzeug
-- **CSRF Protection**: Enabled for JWT cookies
-- **Input Validation**: Server-side validation for all inputs
+- **Password Hashing**: User passwords are saved securely
+- **CSRF Protection**: Enabled for specific operations
 
-## Development
 
-### Compiling TypeScript
-
-```bash
-# One-time build
-npm run build
-
-# Or run in watch mode for auto-compilation
-npm run watch
-```
-
-### Running in Development
-
-```bash
-cd backend
-FLASK_ENV=development FLASK_DEBUG=1 python app.py
-```
-
-### Running in Production
+## Production Deployment
 
 For production, use a proper WSGI server like Gunicorn:
 
 ```bash
-cd backend
-gunicorn -w 4 -b 0.0.0.0:5000 app:app
+gunicorn -w 4 -b 0.0.0.0:5000 run:app
 ```
 
 ## Troubleshooting
@@ -251,9 +195,6 @@ Enable debug logging by setting `FLASK_DEBUG=1` in your environment.
 - **Container Networking**: Advanced network configuration
 - **Backup/Restore**: Container backup functionality
 
-## License
-
-MIT License - See LICENSE file for details.
 
 ## Support
 

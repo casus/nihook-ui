@@ -46,3 +46,12 @@ class Config:
     # Security
     SESSION_COOKIE_SECURE = os.getenv(
         'FLASK_ENV', 'development') == 'production'
+
+# Allow direct imports (e.g. `from backend.config import DEBUG`)
+DEBUG = Config.DEBUG
+SSH_CONFIG = Config.SSH_CONFIG
+NIHOOK_FOLDER = Config.NIHOOK_FOLDER
+CONTAINER_SCRIPTS_DIR = Config.CONTAINER_SCRIPTS_DIR
+SPIN_UP_SCRIPT = Config.SPIN_UP_SCRIPT
+RESTART_SCRIPT = Config.RESTART_SCRIPT
+RESUME_SCRIPT = Config.RESUME_SCRIPT
