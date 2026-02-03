@@ -175,6 +175,25 @@
                     <label for="table-name">Table Name:</label>
                     <input type="text" id="table-name" name="table_name" placeholder="Currently selected table name" required>
                 </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="create-gitlab-webhook" name="create_gitlab_webhook">
+                        Do you want to automatically create a gitlab webhook?
+                    </label>
+                </div>
+
+                <div id="gitlab-webhook-group" style="display: none;">
+                    <div class="form-group">
+                        <label for="gitlab-repo-url">GitLab Repo URL:</label>
+                        <input type="text" id="gitlab-repo-url" name="gitlab_repo_url" placeholder="https://gitlab.com/username/repo">
+                    </div>
+                    <div class="form-group">
+                        <label for="gitlab-api-token">GitLab API Token:</label>
+                        <input type="text" id="gitlab-api-token" name="gitlab_api_token" placeholder="Enter GitLab Token">
+                        <small style="display: block; margin-top: 5px; color: #666;">Note: The token should have Maintainer+ access.</small>
+                    </div>
+                </div>
                 
                 <div class="form-actions" style="margin-top: 20px;">
                     <button type="button" class="cancel-btn" id="cancel-create-table-btn">Cancel</button>

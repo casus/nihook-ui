@@ -220,6 +220,18 @@ def create_table_from_schema():
     if new_base_name:
         form_data["new_base_name"] = new_base_name
 
+    # Gitlab webhook fields
+    if data.get("create_gitlab_webhook"):
+        form_data["create_gitlab_webhook"] = "true"
+        form_data["gitlab_repo_url"] = data.get("gitlab_repo_url")
+        form_data["gitlab_api_token"] = data.get("gitlab_api_token")
+        # User requested server_ip to be webhook_host
+        form_data["server_ip"] = container.webhook_host
+        if container.webhook_user:
+             form_data["webhook_username"] = container.webhook_user
+        if container.webhook_secret:
+             form_data["webhook_secret"] = container.webhook_secret
+
     # Prepare file: convert schema_definition (dict) to JSON string/bytes
     schema_json = json.dumps(schema.schema_definition)
     files = {

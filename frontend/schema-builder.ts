@@ -65,6 +65,29 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
 });
 
+function toggleGitlabWebhookOptions(): void {
+    const checkbox = document.getElementById('create-gitlab-webhook') as HTMLInputElement;
+    const group = document.getElementById('gitlab-webhook-group') as HTMLDivElement;
+    
+    if (checkbox && group) {
+        if (checkbox.checked) {
+            group.style.display = 'block';
+        } else {
+            group.style.display = 'none';
+        }
+    }
+}
+
+function updateSchemaListSelection(): void {
+    const items = document.querySelectorAll('.schema-item');
+    items.forEach(item => {
+        item.classList.remove('selected');
+        if (item instanceof HTMLElement && currentSchema && currentSchema.id && item.dataset.id === currentSchema.id.toString()) {
+            item.classList.add('selected');
+        }
+    });
+}
+
 function setupEventListeners(): void {
     const createSchemaBtn = document.getElementById('create-schema-btn') as HTMLButtonElement;
     const saveSchemaBtn = document.getElementById('save-schema-btn') as HTMLButtonElement;
@@ -101,6 +124,12 @@ function setupEventListeners(): void {
     baseOptionRadios.forEach(radio => {
         radio.addEventListener('change', toggleBaseOptions);
     });
+
+    // Checkbox logic for gitlab webhook
+    const createGitlabWebhookCheckbox = document.getElementById('create-gitlab-webhook') as HTMLInputElement;
+    if(createGitlabWebhookCheckbox) {
+        createGitlabWebhookCheckbox.addEventListener('change', toggleGitlabWebhookOptions);
+    }
 
     // Radio button logic for import method
     const importMethodRadios = document.querySelectorAll('input[name="import-method"]');
@@ -201,6 +230,10 @@ function renderSchemasList(): void {
     schemas.forEach(schema => {
         const schemaItem = document.createElement('div');
         schemaItem.className = 'schema-item';
+        if (currentSchema && currentSchema.id === schema.id) {
+            schemaItem.classList.add('selected');
+        }
+        schemaItem.dataset.id = schema.id ? schema.id.toString() : '';
         schemaItem.style.cursor = 'pointer';
         schemaItem.addEventListener('click', () => loadSchema(schema));
         
@@ -230,11 +263,13 @@ function createNewSchema(): void {
     };
     
     updateSchemaEditor();
+    updateSchemaListSelection();
 }
 
 function loadSchema(schema: Schema): void {
     currentSchema = JSON.parse(JSON.stringify(schema)); // Deep copy
     updateSchemaEditor();
+    updateSchemaListSelection();
 }
 
 function updateSchemaEditor(): void {
@@ -766,6 +801,7 @@ function showCreateTableModal(): void {
     const existingBaseRadio = document.querySelector('input[name="base-option"][value="existing"]') as HTMLInputElement;
     existingBaseRadio.checked = true;
     toggleBaseOptions();
+    toggleGitlabWebhookOptions();
     
     // Populate containers
     fetchContainers();
@@ -835,6 +871,11 @@ async function handleCreateTableSubmit(e: Event): Promise<void> {
     const newBaseName = formData.get('new_base_name');
     const tableName = formData.get('table_name');
     
+    // Gitlab Webhook
+    const createGitlabWebhook = (document.getElementById('create-gitlab-webhook') as HTMLInputElement).checked;
+    const gitlabRepoUrl = formData.get('gitlab_repo_url');
+    const gitlabApiToken = formData.get('gitlab_api_token');
+
     if (!containerId) {
         alert('Please select a container');
         return;
@@ -854,6 +895,17 @@ async function handleCreateTableSubmit(e: Event): Promise<void> {
         alert('Please enter a Table Name');
         return;
     }
+
+    if (createGitlabWebhook) {
+        if (!gitlabRepoUrl) {
+            alert('Please enter GitLab Repo URL');
+            return;
+        }
+        if (!gitlabApiToken) {
+            alert('Please enter GitLab API Token');
+            return;
+        }
+    }
     
     const submitBtn = document.getElementById('confirm-create-table-btn') as HTMLButtonElement;
     const originalText = submitBtn.textContent;
@@ -861,13 +913,21 @@ async function handleCreateTableSubmit(e: Event): Promise<void> {
     submitBtn.disabled = true;
     
     try {
-        const response = await apiCall('/api/schemas/create-table', 'POST', {
+        const payload: any = {
             container_id: containerId,
             base_id: baseOption === 'existing' ? baseId : null,
             new_base_name: baseOption === 'new' ? newBaseName : null,
             table_name: tableName,
             schema_id: currentSchema.id
-        });
+        };
+
+        if (createGitlabWebhook) {
+            payload.create_gitlab_webhook = true;
+            payload.gitlab_repo_url = gitlabRepoUrl;
+            payload.gitlab_api_token = gitlabApiToken;
+        }
+
+        const response = await apiCall('/api/schemas/create-table', 'POST', payload);
         
         if (response.error) {
             alert(`Error: ${response.error}`);
