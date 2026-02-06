@@ -875,6 +875,7 @@ async function handleCreateTableSubmit(e: Event): Promise<void> {
     const createGitlabWebhook = (document.getElementById('create-gitlab-webhook') as HTMLInputElement).checked;
     const gitlabRepoUrl = formData.get('gitlab_repo_url');
     const gitlabApiToken = formData.get('gitlab_api_token');
+    const gitlabProjectToken = formData.get('gitlab_project_token');
 
     if (!containerId) {
         alert('Please select a container');
@@ -905,6 +906,10 @@ async function handleCreateTableSubmit(e: Event): Promise<void> {
             alert('Please enter GitLab API Token');
             return;
         }
+        if (!gitlabProjectToken) {
+            alert('Please enter GitLab Project Token');
+            return;
+        }
     }
     
     const submitBtn = document.getElementById('confirm-create-table-btn') as HTMLButtonElement;
@@ -925,6 +930,7 @@ async function handleCreateTableSubmit(e: Event): Promise<void> {
             payload.create_gitlab_webhook = true;
             payload.gitlab_repo_url = gitlabRepoUrl;
             payload.gitlab_api_token = gitlabApiToken;
+            payload.gitlab_project_token = gitlabProjectToken;
         }
 
         const response = await apiCall('/api/schemas/create-table', 'POST', payload);

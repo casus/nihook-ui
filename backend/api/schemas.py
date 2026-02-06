@@ -225,6 +225,7 @@ def create_table_from_schema():
         form_data["create_gitlab_webhook"] = "true"
         form_data["gitlab_repo_url"] = data.get("gitlab_repo_url")
         form_data["gitlab_api_token"] = data.get("gitlab_api_token")
+        form_data["gitlab_project_token"] = data.get("gitlab_project_token")
         # User requested server_ip to be webhook_host
         form_data["server_ip"] = container.webhook_host
         if container.webhook_user:
@@ -250,6 +251,26 @@ def create_table_from_schema():
         if resp.status_code >= 200 and resp.status_code < 300:
             try:
                 resp_json = resp.json()
+
+                # Trigger upload-all-commits
+                if data.get("create_gitlab_webhook"):
+                    table_id = resp_json.get("table")
+                    print(resp_json)
+                    if table_id:
+                        try:
+                            upload_url = f"{container.webhook_host.rstrip('/')}/webhooks/upload-all-commits"
+                            custom_headers = headers.copy()
+                            custom_headers["X-Webhook-Nocodbtableid"] = str(table_id)
+                            
+                            requests.post(
+                                upload_url,
+                                headers=custom_headers,
+                                json={"project_url": data.get("gitlab_repo_url")},
+                                timeout=30
+                            )
+                        except Exception as e:
+                            logger.error(f"Error triggering upload-all-commits: {e}")
+
                 return jsonify(resp_json), 200
             except:
                 return jsonify({"message": "Table created successfully", "upstream_response": resp.text}), 200
