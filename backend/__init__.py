@@ -16,7 +16,8 @@ def create_app():
 
     db.init_app(app)
     jwt.init_app(app)
-    migrate.init_app(app, db)
+    # Use render_as_batch=True to avoid issues with SQLite and Alembic when using DeclarativeBase
+    migrate.init_app(app, db, render_as_batch=True)
     register_jwt_callbacks(jwt)
 
     # Register blueprints

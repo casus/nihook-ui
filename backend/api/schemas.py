@@ -1,5 +1,6 @@
 import json
 from flask import Blueprint, request, jsonify
+from sqlalchemy import select
 import requests
 from backend.extensions import db
 from backend.models import Schema, Container
@@ -22,7 +23,8 @@ def get_schemas():
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
 
-    schemas = Schema.query.filter_by(user_id=current_user_id).all()
+    stmt = select(Schema).where(Schema.owner_id == current_user_id)
+    schemas = db.session.execute(stmt).scalars().all()
     return jsonify([schema.to_dict() for schema in schemas]), 200
 
 
@@ -79,7 +81,11 @@ def get_schema(schema_id):
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
 
-    schema = Schema.query.filter_by(id=schema_id, user_id=current_user_id).first()
+    stmt = select(Schema).where(
+        Schema.id == schema_id,
+        Schema.owner_id == current_user_id
+    )
+    schema = db.session.execute(stmt).scalars().first()
 
     if not schema:
         return jsonify({"error": "Schema not found"}), 404
@@ -95,8 +101,12 @@ def update_schema(schema_id):
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-
-    schema = Schema.query.filter_by(id=schema_id, user_id=current_user_id).first()
+    
+    stmt = select(Schema).where(
+        Schema.id == schema_id,
+        Schema.owner_id == current_user_id
+    )
+    schema = db.session.execute(stmt).scalars().first()
 
     if not schema:
         return jsonify({"error": "Schema not found"}), 404
@@ -130,8 +140,12 @@ def delete_schema(schema_id):
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-
-    schema = Schema.query.filter_by(id=schema_id, user_id=current_user_id).first()
+    
+    stmt = select(Schema).where(
+        Schema.id == schema_id,
+        Schema.owner_id == current_user_id
+    )
+    schema = db.session.execute(stmt).scalars().first()
 
     if not schema:
         return jsonify({"error": "Schema not found"}), 404
@@ -150,8 +164,12 @@ def download_schema(schema_id):
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-
-    schema = Schema.query.filter_by(id=schema_id, user_id=current_user_id).first()
+    
+    stmt = select(Schema).where(
+        Schema.id == schema_id,
+        Schema.owner_id == current_user_id
+    )
+    schema = db.session.execute(stmt).scalars().first()
 
     if not schema:
         return jsonify({"error": "Schema not found"}), 404
@@ -190,7 +208,11 @@ def create_table_from_schema():
          return jsonify({"error": "Either base_id or new_base_name must be provided"}), 400
 
     # Retrieve Container
-    container = Container.query.filter_by(id=container_id, user_id=user_id).first()
+    stmt = select(Container).where(
+        Container.id == container_id,
+        Container.owner_id == user_id
+    )
+    container = db.session.execute(stmt).scalars().first()
     if not container:
         return jsonify({"error": "Container not found or unauthorized"}), 404
         
@@ -198,8 +220,9 @@ def create_table_from_schema():
          return jsonify({"error": "Container is not configured with a webhook host"}), 400
 
     # Retrieve Schema
-    schema = Schema.query.filter_by(id=schema_id).first()
-    if not schema or schema.user_id != user_id:
+    stmt = select(Schema).where(Schema.id == schema_id)
+    schema = db.session.execute(stmt).scalars().first()
+    if not schema or schema.owner_id != user_id:
         return jsonify({"error": "Schema not found or unauthorized"}), 404
 
     # Prepare request to downstream container

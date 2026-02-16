@@ -1,5 +1,12 @@
-from backend.extensions import db
-from typing import Optional
+from backend.extensions import db, Base
+from datetime import datetime
+from typing import Any, Dict, Optional, TYPE_CHECKING
+from sqlalchemy import Integer, String, JSON, DateTime, ForeignKey, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+if TYPE_CHECKING:
+    from .user import User
+
 VALID_TYPES = ["string", "integer", "number", "boolean", "array", "object", "null"]
 VALID_STRING_SUBTYPES = ["DateTime", "Duration", "URL", ""]
 VALID_ARRAY_ITEM_TYPES = ["string", "integer", "number", "boolean", "null"]
@@ -7,37 +14,52 @@ VALID_ARRAY_ITEM_TYPES = ["string", "integer", "number", "boolean", "null"]
 
 
 
-class Schema(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(120), nullable=False)
-    schema_definition = db.Column(db.JSON, nullable=False)
-    example = db.Column(db.JSON, nullable=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, server_default=db.func.now())
-    updated_at = db.Column(
-        db.DateTime, server_default=db.func.now(), onupdate=db.func.now()
+class Schema(Base):
+    __tablename__ = "schema"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+
+    schema_definition: Mapped[Dict[str, Any]] = mapped_column(
+        JSON,
+        nullable=False
     )
 
-    def __init__(self, name, schema_definition, user_id, example=None):
-        self.name = name
-        self.schema_definition = schema_definition
-        self.user_id = user_id
-        if example is None:
-            self.example = Schema.generate_example_from_schema(schema_definition)
-        else:
-            self.example = example
+    example: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSON
+    )
 
-    def to_dict(self):
+    owner_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id"),
+        nullable=False
+    )
+
+    owner: Mapped["User"] = relationship(
+        back_populates="schemas"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now()
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "name": self.name,
             "schema_definition": self.schema_definition,
             "example": self.example,
-            "user_id": self.user_id,
+            "owner_id": self.owner_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
-
 
     @staticmethod
     def generate_example_from_schema(schema_def: dict) -> dict:

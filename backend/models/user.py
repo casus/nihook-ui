@@ -1,13 +1,45 @@
-from backend.extensions import db
+from typing import List, TYPE_CHECKING
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
-    containers = db.relationship("Container", backref="owner", lazy=True)
+from sqlalchemy import String, Integer
+from sqlalchemy.orm import Mapped, relationship, mapped_column
 
-    def __init__(self, username, email, password_hash):
-        self.username = username
-        self.email = email
-        self.password_hash = password_hash
+from backend.extensions import Base
+
+if TYPE_CHECKING:
+    from . import Container, Schema
+
+
+class User(Base):
+    __tablename__ = "user"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    username: Mapped[str] = mapped_column(
+        String(80),
+        unique=True,
+        nullable=False
+    )
+
+    email: Mapped[str] = mapped_column(
+        String(120),
+        unique=True,
+        nullable=False
+    )
+
+    password_hash: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False
+    )
+
+    containers: Mapped[List["Container"]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+    schemas: Mapped[List["Schema"]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )

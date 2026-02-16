@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify, render_template, send_from_directory
+from sqlalchemy import select
 from werkzeug.security import generate_password_hash, check_password_hash
 from backend.extensions import db
-from backend.models import Container
+from backend.models import Container, User
 from flask_jwt_extended import (
     jwt_required,
     get_jwt_identity,
@@ -21,7 +22,9 @@ def get_containers():
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-    containers = Container.query.filter_by(user_id=current_user_id).all()
+    
+    stmt = select(Container).where(Container.owner_id == current_user_id)
+    containers = db.session.execute(stmt).scalars().all()
 
     # Batch-update statuses with a single podman inspect call to save SSH roundtrips
     podman_ids = [c.podman_id for c in containers if c.podman_id]
@@ -76,14 +79,20 @@ def create_container():
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
+    
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
     data = request.get_json()
 
     # Create container record in database
     new_container = Container(
         name=data["name"],
         description=data.get("description", ""),
-        user_id=current_user_id,
+        owner=current_user,
     )
+
 
     # Create container on remote server using custom script
     # Build arguments for the spin_up script
@@ -106,16 +115,19 @@ def create_container():
     return jsonify(new_container.to_dict()), 201
 
 
-@containers_bp.route("<int:container_id>", methods=["GET"])
+@containers_bp.route("/<int:container_id>", methods=["GET"])
 @jwt_required()
 def get_container(container_id):
     try:
         current_user_id = int(get_jwt_identity())
-    except Exception:
+    except ValueError:
         return jsonify({"error": "Invalid user identity in token"}), 401
-    container = Container.query.filter_by(
-        id=container_id, user_id=current_user_id
-    ).first()
+
+    stmt = select(Container).where(
+        Container.id == container_id, 
+        Container.owner_id == current_user_id
+    )
+    container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -138,9 +150,11 @@ def update_container(container_id):
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-    container = Container.query.filter_by(
-        id=container_id, user_id=current_user_id
-    ).first()
+    stmt = select(Container).where(
+        Container.id == container_id,
+        Container.owner_id == current_user_id
+    )
+    container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -164,9 +178,11 @@ def start_container(container_id):
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-    container = Container.query.filter_by(
-        id=container_id, user_id=current_user_id
-    ).first()
+    stmt = select(Container).where(
+        Container.id == container_id,
+        Container.owner_id == current_user_id
+    )
+    container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -196,9 +212,11 @@ def stop_container(container_id):
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-    container = Container.query.filter_by(
-        id=container_id, user_id=current_user_id
-    ).first()
+    stmt = select(Container).where(
+        Container.id == container_id,
+        Container.owner_id == current_user_id
+    )
+    container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -222,9 +240,11 @@ def restart_container(container_id):
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-    container = Container.query.filter_by(
-        id=container_id, user_id=current_user_id
-    ).first()
+    stmt = select(Container).where(
+        Container.id == container_id,
+        Container.owner_id == current_user_id
+    )
+    container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -253,9 +273,11 @@ def delete_container(container_id):
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-    container = Container.query.filter_by(
-        id=container_id, user_id=current_user_id
-    ).first()
+    stmt = select(Container).where(
+        Container.id == container_id,
+        Container.owner_id == current_user_id
+    )
+    container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -283,9 +305,11 @@ def list_container_logs(container_id):
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
 
-    container = Container.query.filter_by(
-        id=container_id, user_id=current_user_id
-    ).first()
+    stmt = select(Container).where(
+        Container.id == container_id,
+        Container.owner_id == current_user_id
+    )
+    container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -336,9 +360,11 @@ def get_container_log(container_id, filename):
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
 
-    container = Container.query.filter_by(
-        id=container_id, user_id=current_user_id
-    ).first()
+    stmt = select(Container).where(
+        Container.id == container_id,
+        Container.owner_id == current_user_id
+    )
+    container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404

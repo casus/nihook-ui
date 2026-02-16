@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify, render_template, send_from_directory
+from sqlalchemy import select
 from werkzeug.security import generate_password_hash, check_password_hash
 from backend.extensions import db
 from backend.models import User
@@ -18,8 +19,9 @@ def login():
     username = data.get("username")
     # TODO: Change this to hashed password comparison
     password = data.get("password")
+    stmt = select(User).where(User.username == username)
 
-    user = User.query.filter_by(username=username).first()
+    user = db.session.execute(stmt).scalars().first()
     if user and check_password_hash(user.password_hash, password):
         # Use string identity to be compatible with newer flask-jwt-extended
         access_token = create_access_token(identity=str(user.id))
@@ -44,10 +46,13 @@ def register():
     email = data.get("email")
     password = data.get("password")
 
-    if User.query.filter_by(username=username).first():
+    stmt_username = select(User).where(User.username == username)
+    stmt_email = select(User).where(User.email == email)
+    user = db.session.execute(stmt_username).scalars().first()
+    if user:
         return jsonify({"error": "Username already exists"}), 400
-
-    if User.query.filter_by(email=email).first():
+    user = db.session.execute(stmt_email).scalars().first()
+    if user:
         return jsonify({"error": "Email already exists"}), 400
 
     hashed_password = generate_password_hash(password)

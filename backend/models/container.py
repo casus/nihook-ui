@@ -1,64 +1,64 @@
 import os
 import re
-from backend.extensions import db
+from typing import List, Optional, TYPE_CHECKING
 
-class Container(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(120), nullable=False)
-    description = db.Column(db.String(500))
-    status = db.Column(db.String(20), default="stopped")
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+from sqlalchemy import String, Integer, Text, ForeignKey
+from sqlalchemy.orm import Mapped, relationship, mapped_column
+
+from backend.extensions import db, Base
+
+if TYPE_CHECKING:
+    from .gitlab_repository import GitlabRepository
+    from .user import User
+
+
+class Container(Base):
+    __tablename__ = "container"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(20), default="stopped")
+
+    owner: Mapped["User"] = relationship(
+        "User",
+        back_populates="containers"
+    )
+    owner_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id"),
+        nullable=False
+    )
+
 
     # Additional container properties
-    ports = db.Column(db.String(255))
-    folder_path = db.Column(db.String(255))
-    podman_id = db.Column(db.String(255))
-    public_url = db.Column(db.String(255))
-    instructions = db.Column(db.Text)
-    nocodb_token = db.Column(db.String(255))
-    nocodb_ssl_cert = db.Column(db.String(255))
-    webhook_host = db.Column(db.String(255))
-    webhook_user = db.Column(db.String(255))
-    webhook_secret = db.Column(db.String(255))
+    ports: Mapped[Optional[str]] = mapped_column(String(255))
+    folder_path: Mapped[Optional[str]] = mapped_column(String(255))
+    podman_id: Mapped[Optional[str]] = mapped_column(String(255))
+    public_url: Mapped[Optional[str]] = mapped_column(String(255))
+    instructions: Mapped[Optional[str]] = mapped_column(Text)
 
-    def __init__(
-        self,
-        name,
-        description="",
-        user_id=None,
-        status="stopped",
-        ports=None,
-        folder_path=None,
-        podman_id=None,
-        public_url=None,
-        instructions=None,
-        nocodb_token=None,
-        nocodb_ssl_cert=None,
-        webhook_host=None,
-        webhook_user=None,
-        webhook_secret=None,
-    ):
-        self.name = name
-        self.description = description
-        self.user_id = user_id
-        self.status = status
-        self.ports = ports
-        self.folder_path = folder_path
-        self.podman_id = podman_id
-        self.public_url = public_url
-        self.instructions = instructions
-        self.nocodb_token = nocodb_token
-        self.nocodb_ssl_cert = nocodb_ssl_cert
-        self.webhook_host = webhook_host
-        self.webhook_user = webhook_user
-        self.webhook_secret = webhook_secret
+    nocodb_token: Mapped[Optional[str]] = mapped_column(String(255))
+    nocodb_ssl_cert: Mapped[Optional[str]] = mapped_column(String(255))
 
-    def to_dict(self):
-        return {
+    webhook_host: Mapped[Optional[str]] = mapped_column(String(255))
+    webhook_user: Mapped[Optional[str]] = mapped_column(String(255))
+    webhook_secret: Mapped[Optional[str]] = mapped_column(String(255))
+
+    gitlab_repositories: Mapped[List["GitlabRepository"]] = relationship(
+        back_populates="container",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+
+    def to_dict(self, include_gitlab_repos: bool = False) -> dict:
+        data = {
             "id": self.id,
             "name": self.name,
             "description": self.description,
-            "user_id": self.user_id,
+            "owner_id": self.owner_id,
             "status": self.status,
             "ports": self.ports,
             "folder_path": self.folder_path,
@@ -71,6 +71,13 @@ class Container(db.Model):
             "webhook_user": self.webhook_user,
             "webhook_secret": self.webhook_secret,
         }
+
+        if include_gitlab_repos:
+            data["gitlab_repositories"] = [
+                repo.to_dict() for repo in self.gitlab_repositories
+            ]
+
+        return data
 
     def update_with_spinup_details(self, details: dict):
         """Update container fields from the dictionary returned by parse_spinup_output.
@@ -230,3 +237,6 @@ class Container(db.Model):
             "webhook_user": webhook_user,
             "webhook_secret": webhook_secret,
         }
+   
+
+
