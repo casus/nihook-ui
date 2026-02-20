@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 class User(Base):
     __tablename__ = "user"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, init=False)
 
     username: Mapped[str] = mapped_column(
         String(80),
@@ -35,11 +35,12 @@ class User(Base):
         back_populates="owner",
         cascade="all, delete-orphan",
         lazy="selectin",
+        default_factory=list,
     )
-
 
     schemas: Mapped[List["Schema"]] = relationship(
         back_populates="owner",
         cascade="all, delete-orphan",
         lazy="selectin",
+        default_factory=list,
     )

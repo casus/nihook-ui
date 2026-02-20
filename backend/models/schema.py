@@ -17,9 +17,15 @@ VALID_ARRAY_ITEM_TYPES = ["string", "integer", "number", "boolean", "null"]
 class Schema(Base):
     __tablename__ = "schema"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, init=False)
 
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+
+    owner_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id"),
+        nullable=False,
+        init=False
+    )
 
     schema_definition: Mapped[Dict[str, Any]] = mapped_column(
         JSON,
@@ -27,27 +33,24 @@ class Schema(Base):
     )
 
     example: Mapped[Optional[Dict[str, Any]]] = mapped_column(
-        JSON
-    )
-
-    owner_id: Mapped[int] = mapped_column(
-        ForeignKey("user.id"),
-        nullable=False
+        JSON, default=None
     )
 
     owner: Mapped["User"] = relationship(
-        back_populates="schemas"
+        back_populates="schemas", default=None
     )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        server_default=func.now()
+        server_default=func.now(),
+        init=False
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         server_default=func.now(),
-        onupdate=func.now()
+        onupdate=func.now(),
+        init=False
     )
 
     def to_dict(self) -> dict:

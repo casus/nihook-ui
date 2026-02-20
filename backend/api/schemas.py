@@ -10,6 +10,8 @@ from flask_jwt_extended import (
 )
 import logging
 
+from  backend.models import User
+
 
 logger = logging.getLogger(__name__)
 schemas_bp = Blueprint("schemas", __name__)
@@ -37,6 +39,9 @@ def create_schema():
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
 
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
     data = request.get_json()
 
     if not data.get("name"):
@@ -60,7 +65,7 @@ def create_schema():
 
     try:
         new_schema = Schema(
-            name=data["name"], schema_definition=schema_def, owner_id=current_user_id
+            name=data["name"], schema_definition=schema_def, owner=current_user
         )
         db.session.add(new_schema)
         db.session.commit()

@@ -14,28 +14,28 @@ if TYPE_CHECKING:
 class Container(Base):
     __tablename__ = "container"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, init=False)
 
     name: Mapped[str] = mapped_column(String(120), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(String(500))
+    owner_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False, init=False)
+    description: Mapped[Optional[str]] = mapped_column(String(500), default=None)
     status: Mapped[str] = mapped_column(String(20), default="stopped")
 
-    owner: Mapped["User"] = relationship("User", back_populates="containers")
-    owner_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    owner: Mapped["User"] = relationship("User", back_populates="containers", default=None)
 
     # Additional container properties
-    ports: Mapped[Optional[str]] = mapped_column(String(255))
-    folder_path: Mapped[Optional[str]] = mapped_column(String(255))
-    podman_id: Mapped[Optional[str]] = mapped_column(String(255))
-    public_url: Mapped[Optional[str]] = mapped_column(String(255))
-    instructions: Mapped[Optional[str]] = mapped_column(Text)
+    ports: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    folder_path: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    podman_id: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    public_url: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    instructions: Mapped[Optional[str]] = mapped_column(Text, default=None)
 
-    nocodb_token: Mapped[Optional[str]] = mapped_column(String(255))
-    nocodb_ssl_cert: Mapped[Optional[str]] = mapped_column(String(255))
+    nocodb_token: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    nocodb_ssl_cert: Mapped[Optional[str]] = mapped_column(String(255), default=None)
 
-    webhook_host: Mapped[Optional[str]] = mapped_column(String(255))
-    webhook_user: Mapped[Optional[str]] = mapped_column(String(255))
-    webhook_secret: Mapped[Optional[str]] = mapped_column(String(255))
+    webhook_host: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    webhook_user: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    webhook_secret: Mapped[Optional[str]] = mapped_column(String(255), default=None)
 
 
     def to_dict(self) -> dict:
