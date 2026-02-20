@@ -1,4 +1,8 @@
 // Schema Builder TypeScript Application
+import { apiCall, ApiResponse } from './services/api.js';
+import { ENDPOINTS } from './services/endpoints.js';
+import { Container } from './models/types.js'; // Ensure Container is exported there.
+import { showToast } from './utils/toast.js'; // If used. I saw showToast calls.
 
 // Types
 interface SchemaField {
@@ -153,61 +157,11 @@ function setupEventListeners(): void {
     });
 }
 
-function getAuthToken(): string | null {
-    return localStorage.getItem('access_token');
-}
-
-async function apiCall<T>(endpoint: string, method: string = 'GET', data: any = null): Promise<ApiResponse<T>> {
-    const token = getAuthToken();
-    if (!token) {
-        window.location.href = '/login';
-        return { error: 'Not authenticated' } as ApiResponse<T>;
-    }
-    
-    try {
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-        };
-        
-        const options: RequestInit = {
-            method,
-            headers
-        };
-        
-        if (data) {
-            options.body = JSON.stringify(data);
-        }
-        
-        const response = await fetch(endpoint, options);
-        
-        if (!response.ok) {
-            if (response.status === 401) {
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('user_id');
-                localStorage.removeItem('username');
-                window.location.href = '/login';
-                return { error: 'Session expired. Please log in again.' } as ApiResponse<T>;
-            }
-            
-            try {
-                const errorData = await response.json();
-                return { error: errorData.error || errorData.message || `API request failed (${response.status})` } as ApiResponse<T>;
-            } catch {
-                const text = await response.text();
-                return { error: `API request failed (${response.status}): ${text}` } as ApiResponse<T>;
-            }
-        }
-        
-        return await response.json() as ApiResponse<T>;
-    } catch (error) {
-        console.error('API call error:', error);
-        return { error: 'Network error. Please try again.' } as ApiResponse<T>;
-    }
-}
+// Removed duplications of getAuthToken and apiCall as they are imported
+// from services/auth.js and services/api.js
 
 async function fetchSchemas(): Promise<void> {
-    const response = await apiCall<Schema[]>('/api/schemas');
+    const response = await apiCall<Schema[]>(ENDPOINTS.SCHEMAS.LIST);
     
     if (response.error) {
         showToast(response.error, 'error');
@@ -968,31 +922,6 @@ function updateJsonPreview(): void {
             exampleCodeElement.textContent = '{}';
         }
     }
-}
-
-function showToast(message: string, type: string = 'info'): void {
-    let container = document.getElementById('toast-container') as HTMLDivElement | null;
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'toast-container';
-        container.className = 'toast-container';
-        document.body.appendChild(container);
-    }
-    
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.textContent = message;
-    
-    container.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.style.animation = 'toast-exit 0.3s ease-in forwards';
-        toast.addEventListener('animationend', () => {
-            if (toast.parentElement === container) {
-                container.removeChild(toast);
-            }
-        }, { once: true });
-    }, 3000);
 }
 
 function showImportModal(): void {

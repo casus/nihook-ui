@@ -99,6 +99,7 @@ def create_container():
         name=data["name"],
         description=data.get("description", ""),
         owner=current_user,
+        
     )
 
     # Create container on remote server using custom script

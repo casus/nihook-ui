@@ -133,44 +133,6 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="./out/app.js"></script>
-    <script>
-        // Check authentication status on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            const token = localStorage.getItem('access_token');
-            const username = localStorage.getItem('username');
-            
-            if (!token) {
-                // Redirect to login if not authenticated
-                window.location.href = '/login';
-                return;
-            }
-            
-            // Show username and logout button
-            document.getElementById('username-display').textContent = `Logged in as: ${username}`;
-            
-            // Set up logout button
-            document.getElementById('logout-btn').addEventListener('click', async function() {
-                try {
-                    const response = await fetch('/logout', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-                    
-                    if (response.ok) {
-                        // Clear local storage and redirect
-                        localStorage.removeItem('access_token');
-                        localStorage.removeItem('user_id');
-                        localStorage.removeItem('username');
-                        window.location.href = '/login';
-                    }
-                } catch (error) {
-                    console.error('Logout error:', error);
-                }
-            });
-        });
-    </script>
+    <script type="module" src="./out/app.js"></script>
 </body>
 </html>
