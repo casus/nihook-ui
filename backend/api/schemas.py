@@ -60,7 +60,7 @@ def create_schema():
 
     try:
         new_schema = Schema(
-            name=data["name"], schema_definition=schema_def, user_id=current_user_id
+            name=data["name"], schema_definition=schema_def, owner_id=current_user_id
         )
         db.session.add(new_schema)
         db.session.commit()

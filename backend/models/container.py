@@ -38,7 +38,7 @@ class Container(Base):
     webhook_secret: Mapped[Optional[str]] = mapped_column(String(255))
 
 
-    def to_dict(self, include_gitlab_repos: bool = False) -> dict:
+    def to_dict(self) -> dict:
         data = {
             "id": self.id,
             "name": self.name,
