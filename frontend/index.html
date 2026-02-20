@@ -53,6 +53,22 @@
                 </div>
                 <button type="submit">Save</button>
             </form>
+            <div class="gitlab-section">
+                <button id="edit-gitlab-tokens-btn" class="action-btn gitlab-tokens-btn">Edit GitLab Tokens</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GitLab Tokens Modal -->
+    <div id="gitlab-modal" class="modal">
+        <div class="modal-content gitlab-modal-content">
+            <span class="close">&times;</span>
+            <h2>GitLab Repositories</h2>
+            <div id="gitlab-repos-list" class="gitlab-repos-list"></div>
+            <div class="gitlab-actions">
+                <button id="add-gitlab-repo-btn" class="action-btn">Add</button>
+                <button id="save-gitlab-repos-btn" class="action-btn save-btn">Save</button>
+            </div>
         </div>
     </div>
 

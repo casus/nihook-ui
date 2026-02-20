@@ -1,19 +1,27 @@
+from importlib.resources import files
+import json
 from flask import Blueprint, request, jsonify, render_template, send_from_directory
+import requests
 from sqlalchemy import select
 from werkzeug.security import generate_password_hash, check_password_hash
 from backend.extensions import db
-from backend.models import Container, User
+from backend.models import Container, User 
 from flask_jwt_extended import (
     jwt_required,
     get_jwt_identity,
 )
 from backend.config import SPIN_UP_SCRIPT, RESTART_SCRIPT, RESUME_SCRIPT, NIHOOK_FOLDER
 import logging
-from backend.services.ssh import get_ssh_client, execute_podman_command, execute_container_script
+from backend.services.ssh import (
+    get_ssh_client,
+    execute_podman_command,
+    execute_container_script,
+)
 
 containers_bp = Blueprint("containers", __name__)
 
 logger = logging.getLogger(__name__)
+
 
 @containers_bp.route("/", methods=["GET"])
 @jwt_required()
@@ -22,11 +30,11 @@ def get_containers():
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-    
+
     stmt = select(Container).where(Container.owner_id == current_user_id)
     containers = db.session.execute(stmt).scalars().all()
 
-    # Batch-update statuses with a single podman inspect call to save SSH roundtrips
+    # Batch-update statuses with a single podman insGitlabRepositorypect call to save SSH roundtrips
     podman_ids = [c.podman_id for c in containers if c.podman_id]
     if podman_ids:
         ids_str = " ".join(podman_ids)
@@ -79,7 +87,7 @@ def create_container():
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-    
+
     current_user = db.session.get(User, current_user_id)
     if not current_user:
         return jsonify({"error": "User not found"}), 404
@@ -92,7 +100,6 @@ def create_container():
         description=data.get("description", ""),
         owner=current_user,
     )
-
 
     # Create container on remote server using custom script
     # Build arguments for the spin_up script
@@ -124,8 +131,7 @@ def get_container(container_id):
         return jsonify({"error": "Invalid user identity in token"}), 401
 
     stmt = select(Container).where(
-        Container.id == container_id, 
-        Container.owner_id == current_user_id
+        Container.id == container_id, Container.owner_id == current_user_id
     )
     container = db.session.execute(stmt).scalars().first()
 
@@ -151,8 +157,7 @@ def update_container(container_id):
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
     stmt = select(Container).where(
-        Container.id == container_id,
-        Container.owner_id == current_user_id
+        Container.id == container_id, Container.owner_id == current_user_id
     )
     container = db.session.execute(stmt).scalars().first()
 
@@ -170,7 +175,214 @@ def update_container(container_id):
 
     return jsonify(container.to_dict()), 200
 
+# ========= Gitlab Repository Endpoints ==========
+@containers_bp.route("<int:container_id>/gitlab-repositories", methods=["GET"])
+@jwt_required()
+def get_gitlab_repositories(container_id):
+    try:
+        current_user_id = int(get_jwt_identity())
+    except Exception:
+        return jsonify({"error": "Invalid user identity in token"}), 401
 
+    stmt = select(Container).where(
+        Container.id == container_id, Container.owner_id == current_user_id
+    )
+    container = db.session.execute(stmt).scalars().first()
+
+    if not container:
+        return jsonify({"error": "Container not found"}), 404
+
+    if not container.webhook_host:
+         return jsonify({"error": "Container is not configured with a webhook host"}), 400
+    
+    webhook_url = f"{container.webhook_host.rstrip('/')}/api/gitlab-projects"
+
+    headers = {}
+    if container.webhook_user:
+        headers["X-Webhook-User"] = container.webhook_user
+    if container.webhook_secret:
+        headers["X-Webhook-Secret"] = container.webhook_secret
+
+    try:
+        resp = requests.get(
+            webhook_url,
+            headers=headers,
+            timeout=30
+        )
+
+        if resp.status_code != 200:
+            return jsonify({"error": f"Failed to fetch Gitlab repositories from webhook: {resp.text}"}), 500
+
+        repo_data = resp.json()
+        repos = []
+        for key, value in repo_data.items():
+            repos.append({
+                "url": key,
+                "access_token": "••••••••" # Do not return actual token from webhook response
+            })
+        return jsonify(repos), 200
+
+    except requests.RequestException as e:
+        logger.error(f"Error fetching Gitlab repositories: {e}")
+        return jsonify({"error": f"Failed to fetch Gitlab repositories: {str(e)}"}), 500
+
+@containers_bp.route("<int:container_id>/gitlab-repositories", methods=["POST"])
+@jwt_required()
+def create_gitlab_repository(container_id):
+    try:
+        current_user_id = int(get_jwt_identity())
+    except Exception:
+        return jsonify({"error": "Invalid user identity in token"}), 401
+
+    stmt = select(Container).where(
+        Container.id == container_id, Container.owner_id == current_user_id
+    )
+    container = db.session.execute(stmt).scalars().first()
+
+    if not container:
+        return jsonify({"error": "Container not found"}), 404
+
+    if not container.webhook_host:
+         return jsonify({"error": "Container is not configured with a webhook host"}), 400
+
+    data = request.get_json()
+
+    if not data.get("url"):
+        return jsonify({"error": "URL is required"}), 400
+    if not container.webhook_user or not container.webhook_secret:
+        return jsonify({"error": "Container must be configured with both webhook user and secret to add Gitlab repositories"}), 400
+    
+    webhook_url = f"{container.webhook_host.rstrip('/')}/api/gitlab-projects"
+    headers = {}
+    headers["X-Webhook-User"] = container.webhook_user
+    headers["X-Webhook-Secret"] = container.webhook_secret
+    data_to_send = {
+        "url": data["url"],
+        "token": data.get("access_token", "")
+    }
+
+
+    try:
+        resp = requests.post(
+            webhook_url,
+            headers=headers,
+            json=data_to_send,
+            timeout=30
+        )
+
+        if resp.status_code != 201:
+            return jsonify({"error": f"Failed to create Gitlab repository via webhook: {resp.text}"}), 500
+
+    except requests.RequestException as e:
+        logger.error(f"Error creating Gitlab repository via webhook: {e}")
+        return jsonify({"error": f"Failed to create Gitlab repository via webhook: {str(e)}"}), 500
+
+    return jsonify({"message": "Gitlab repository created successfully"}), 201
+
+
+@containers_bp.route(
+    "/<int:container_id>/gitlab-repositories/<path:repo_url>", methods=["PUT"]
+)
+@jwt_required()
+def update_gitlab_repository(container_id, repo_url):
+    try:
+        current_user_id = int(get_jwt_identity())
+    except Exception:
+        return jsonify({"error": "Invalid user identity in token"}), 401
+
+    stmt = select(Container).where(
+        Container.id == container_id, Container.owner_id == current_user_id
+    )
+    container = db.session.execute(stmt).scalars().first()
+
+    if not container:
+        return jsonify({"error": "Container not found"}), 404
+    if not container.webhook_host:
+         return jsonify({"error": "Container is not configured with a webhook host"}), 400
+
+    if not container.webhook_user or not container.webhook_secret:
+        return jsonify({"error": "Container must be configured with both webhook user and secret to add Gitlab repositories"}), 400
+    
+    webhook_url = f"{container.webhook_host.rstrip('/')}/api/gitlab-projects"
+    headers = {}
+    headers["X-Webhook-User"] = container.webhook_user
+    headers["X-Webhook-Secret"] = container.webhook_secret
+
+    data = request.get_json()
+    data_to_send = {
+        "url": repo_url,
+        "token": data.get("access_token", "")
+    }
+    try:
+        resp = requests.put(
+            webhook_url,
+            headers=headers,
+            json=data_to_send,
+            timeout=30
+        )
+
+        if resp.status_code != 200:
+            return jsonify({"error": f"Failed to update Gitlab repository via webhook: {resp.text}"}), 500
+
+    except requests.RequestException as e:
+        logger.error(f"Error updating Gitlab repository via webhook: {e}")
+        return jsonify({"error": f"Failed to update Gitlab repository via webhook: {str(e)}"}), 500
+
+    return jsonify({"message": "Gitlab repository updated successfully"}), 200
+
+
+@containers_bp.route(
+    "/<int:container_id>/gitlab-repositories/<path:repo_url>", methods=["DELETE"]
+)
+@jwt_required()
+def delete_gitlab_repository(container_id, repo_url):
+    try:
+        current_user_id = int(get_jwt_identity())
+    except Exception:
+        return jsonify({"error": "Invalid user identity in token"}), 401
+
+    stmt = select(Container).where(
+        Container.id == container_id, Container.owner_id == current_user_id
+    )
+    container = db.session.execute(stmt).scalars().first()
+
+    if not container:
+        return jsonify({"error": "Container not found"}), 404
+
+    if not container.webhook_host:
+         return jsonify({"error": "Container is not configured with a webhook host"}), 400
+
+    if not container.webhook_user or not container.webhook_secret:
+        return jsonify({"error": "Container must be configured with both webhook user and secret to add Gitlab repositories"}), 400
+    
+    webhook_url = f"{container.webhook_host.rstrip('/')}/api/gitlab-projects"
+    headers = {}
+    headers["X-Webhook-User"] = container.webhook_user
+    headers["X-Webhook-Secret"] = container.webhook_secret
+    data_to_send = {
+        "url": repo_url
+    }
+    try:
+        resp = requests.delete(
+            f"{webhook_url}",
+            headers=headers,
+            json=data_to_send,
+            timeout=30
+        )
+
+        if resp.status_code != 200:
+            return jsonify({"error": f"Failed to delete Gitlab repository via webhook: {resp.text}"}), 500
+
+    except requests.RequestException as e:
+        logger.error(f"Error deleting Gitlab repository via webhook: {e}")
+        return jsonify({"error": f"Failed to delete Gitlab repository via webhook: {str(e)}"}), 500
+
+
+
+    return jsonify({"message": "Gitlab repository deleted successfully"}), 200
+
+
+# ========= Container Control Endpoints (Start/Stop/Restart/Delete) ==========
 @containers_bp.route("<int:container_id>/start", methods=["POST"])
 @jwt_required()
 def start_container(container_id):
@@ -179,8 +391,7 @@ def start_container(container_id):
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
     stmt = select(Container).where(
-        Container.id == container_id,
-        Container.owner_id == current_user_id
+        Container.id == container_id, Container.owner_id == current_user_id
     )
     container = db.session.execute(stmt).scalars().first()
 
@@ -213,8 +424,7 @@ def stop_container(container_id):
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
     stmt = select(Container).where(
-        Container.id == container_id,
-        Container.owner_id == current_user_id
+        Container.id == container_id, Container.owner_id == current_user_id
     )
     container = db.session.execute(stmt).scalars().first()
 
@@ -241,8 +451,7 @@ def restart_container(container_id):
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
     stmt = select(Container).where(
-        Container.id == container_id,
-        Container.owner_id == current_user_id
+        Container.id == container_id, Container.owner_id == current_user_id
     )
     container = db.session.execute(stmt).scalars().first()
 
@@ -274,8 +483,7 @@ def delete_container(container_id):
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
     stmt = select(Container).where(
-        Container.id == container_id,
-        Container.owner_id == current_user_id
+        Container.id == container_id, Container.owner_id == current_user_id
     )
     container = db.session.execute(stmt).scalars().first()
 
@@ -296,6 +504,7 @@ def delete_container(container_id):
     return jsonify({"message": "Container deleted successfully"}), 200
 
 
+# ========== Container Logs Endpoints ==========
 @containers_bp.route("<int:container_id>/logs", methods=["GET"])
 @jwt_required()
 def list_container_logs(container_id):
@@ -306,8 +515,7 @@ def list_container_logs(container_id):
         return jsonify({"error": "Invalid user identity in token"}), 401
 
     stmt = select(Container).where(
-        Container.id == container_id,
-        Container.owner_id == current_user_id
+        Container.id == container_id, Container.owner_id == current_user_id
     )
     container = db.session.execute(stmt).scalars().first()
 
@@ -341,7 +549,6 @@ def list_container_logs(container_id):
                 filename = line.split("/")[-1]
                 files.append(filename)
 
-
         return jsonify({"files": files}), 200
 
     except Exception as e:
@@ -361,8 +568,7 @@ def get_container_log(container_id, filename):
         return jsonify({"error": "Invalid user identity in token"}), 401
 
     stmt = select(Container).where(
-        Container.id == container_id,
-        Container.owner_id == current_user_id
+        Container.id == container_id, Container.owner_id == current_user_id
     )
     container = db.session.execute(stmt).scalars().first()
 
@@ -402,4 +608,3 @@ def get_container_log(container_id, filename):
         return jsonify({"error": f"Failed to read log file: {str(e)}"}), 500
     finally:
         client.close()
-

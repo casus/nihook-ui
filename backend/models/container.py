@@ -8,7 +8,6 @@ from sqlalchemy.orm import Mapped, relationship, mapped_column
 from backend.extensions import db, Base
 
 if TYPE_CHECKING:
-    from .gitlab_repository import GitlabRepository
     from .user import User
 
 
@@ -21,15 +20,8 @@ class Container(Base):
     description: Mapped[Optional[str]] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(20), default="stopped")
 
-    owner: Mapped["User"] = relationship(
-        "User",
-        back_populates="containers"
-    )
-    owner_id: Mapped[int] = mapped_column(
-        ForeignKey("user.id"),
-        nullable=False
-    )
-
+    owner: Mapped["User"] = relationship("User", back_populates="containers")
+    owner_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
 
     # Additional container properties
     ports: Mapped[Optional[str]] = mapped_column(String(255))
@@ -44,13 +36,6 @@ class Container(Base):
     webhook_host: Mapped[Optional[str]] = mapped_column(String(255))
     webhook_user: Mapped[Optional[str]] = mapped_column(String(255))
     webhook_secret: Mapped[Optional[str]] = mapped_column(String(255))
-
-    gitlab_repositories: Mapped[List["GitlabRepository"]] = relationship(
-        back_populates="container",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-    )
-
 
 
     def to_dict(self, include_gitlab_repos: bool = False) -> dict:
@@ -71,11 +56,6 @@ class Container(Base):
             "webhook_user": self.webhook_user,
             "webhook_secret": self.webhook_secret,
         }
-
-        if include_gitlab_repos:
-            data["gitlab_repositories"] = [
-                repo.to_dict() for repo in self.gitlab_repositories
-            ]
 
         return data
 
@@ -102,8 +82,7 @@ class Container(Base):
         if details.get("webhook_user"):
             self.webhook_user = details["webhook_user"]
         if details.get("webhook_secret"):
-            self.webhook_secret = details["webhook_secret"]   
-
+            self.webhook_secret = details["webhook_secret"]
 
     @staticmethod
     def parse_spinup_output(output: str, nihook_folder: str):
@@ -237,6 +216,3 @@ class Container(Base):
             "webhook_user": webhook_user,
             "webhook_secret": webhook_secret,
         }
-   
-
-

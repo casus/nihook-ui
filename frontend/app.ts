@@ -294,6 +294,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Set form values
         (document.getElementById('container-title') as HTMLInputElement).value = container.name;
         (document.getElementById('container-description') as HTMLTextAreaElement).value = container.description || '';
+        
+        // Show GitLab tokens button when editing an existing container
+        const gitlabSection = document.querySelector('.gitlab-section') as HTMLDivElement;
+        if (gitlabSection) {
+            gitlabSection.style.display = 'block';
+        }
 
         modal.style.display = 'block';
     }
@@ -368,6 +374,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset form
         (document.getElementById('container-title') as HTMLInputElement).value = '';
         (document.getElementById('container-description') as HTMLTextAreaElement).value = '';
+        
+        // Hide GitLab tokens button when creating new container
+        const gitlabSection = document.querySelector('.gitlab-section') as HTMLDivElement;
+        if (gitlabSection) {
+            gitlabSection.style.display = 'none';
+        }
         
         // Show modal
         modal.style.display = 'block';
@@ -754,4 +766,182 @@ document.addEventListener('DOMContentLoaded', () => {
             closeLogsModal();
         }
     });
+
+    // GitLab Repositories Modal
+    let currentGitlabRepos: GitlabRepository[] = [];
+    const gitlabModal = document.getElementById('gitlab-modal') as HTMLDivElement;
+    const editGitlabTokensBtn = document.getElementById('edit-gitlab-tokens-btn') as HTMLButtonElement;
+    const gitlabReposList = document.getElementById('gitlab-repos-list') as HTMLDivElement;
+    const addGitlabRepoBtn = document.getElementById('add-gitlab-repo-btn') as HTMLButtonElement;
+    const saveGitlabReposBtn = document.getElementById('save-gitlab-repos-btn') as HTMLButtonElement;
+
+    if (editGitlabTokensBtn) {
+        editGitlabTokensBtn.addEventListener('click', () => {
+            if (currentContainer) {
+                openGitlabModal(currentContainer.id);
+            }
+        });
+    }
+
+    const gitlabModalCloseBtn = document.querySelector('#gitlab-modal .close') as HTMLSpanElement;
+    if (gitlabModalCloseBtn) {
+        gitlabModalCloseBtn.addEventListener('click', closeGitlabModal);
+    }
+
+    window.addEventListener('click', (event) => {
+        if (event.target === gitlabModal) {
+            closeGitlabModal();
+        }
+    });
+
+    if (addGitlabRepoBtn) {
+        addGitlabRepoBtn.addEventListener('click', addGitlabRepoRow);
+    }
+
+    if (saveGitlabReposBtn) {
+        saveGitlabReposBtn.addEventListener('click', saveGitlabRepos);
+    }
+
+    async function openGitlabModal(containerId: number) {
+        const response = await apiCall<GitlabRepository[]>(`/api/containers/${containerId}/gitlab-repositories`);
+        
+        if (response.error) {
+            showToast(response.error, 'error');
+            return;
+        }
+
+        currentGitlabRepos = response as GitlabRepository[] || [];
+        renderGitlabReposList();
+        gitlabModal.style.display = 'block';
+    }
+
+    function closeGitlabModal() {
+        if (gitlabModal) {
+            gitlabModal.style.display = 'none';
+        }
+    }
+
+    function renderGitlabReposList() {
+        if (!gitlabReposList) return;
+        
+        gitlabReposList.innerHTML = '';
+
+        currentGitlabRepos.forEach((repo, index) => {
+            const row = document.createElement('div');
+            row.className = 'gitlab-repo-row';
+            row.dataset.index = String(index);
+
+            const urlGroup = document.createElement('div');
+            urlGroup.className = 'form-group';
+            const urlLabel = document.createElement('label');
+            urlLabel.textContent = 'GitLab URL';
+            const urlInput = document.createElement('input');
+            urlInput.type = 'text';
+            urlInput.value = repo.url;
+            urlInput.placeholder = 'https://gitlab.com/username/repo';
+            urlGroup.appendChild(urlLabel);
+            urlGroup.appendChild(urlInput);
+
+            const tokenGroup = document.createElement('div');
+            tokenGroup.className = 'form-group';
+            const tokenLabel = document.createElement('label');
+            tokenLabel.textContent = 'Access Token';
+            const tokenInput = document.createElement('input');
+            tokenInput.type = 'password';
+            tokenInput.value = repo.access_token === '••••••••' ? '' : (repo.access_token || '');
+            tokenInput.placeholder = repo.access_token === '••••••••' ? '••••••••' : 'Enter token';
+            tokenGroup.appendChild(tokenLabel);
+            tokenGroup.appendChild(tokenInput);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'remove-gitlab-repo-btn';
+            removeBtn.textContent = '×';
+            removeBtn.addEventListener('click', () => removeGitlabRepoRow(index));
+
+            row.appendChild(urlGroup);
+            row.appendChild(tokenGroup);
+            row.appendChild(removeBtn);
+            gitlabReposList.appendChild(row);
+        });
+    }
+
+    function addGitlabRepoRow() {
+        const newRepo: GitlabRepository = {
+            id: 0,
+            url: '',
+            access_token: '',
+            container_id: currentContainer?.id || 0
+        };
+        currentGitlabRepos.push(newRepo);
+        renderGitlabReposList();
+    }
+
+    function removeGitlabRepoRow(index: number) {
+        currentGitlabRepos.splice(index, 1);
+        renderGitlabReposList();
+    }
+
+    async function saveGitlabRepos() {
+        if (!currentContainer) {
+            showToast('No container selected', 'error');
+            return;
+        }
+
+        const rows = gitlabReposList.querySelectorAll('.gitlab-repo-row');
+        const updatedRepos: { url: string; access_token: string }[] = [];
+
+        rows.forEach((row) => {
+            const urlInput = row.querySelector('input[type="text"]') as HTMLInputElement;
+            const tokenInput = row.querySelector('input[type="password"]') as HTMLInputElement;
+            
+            if (urlInput && urlInput.value.trim()) {
+                updatedRepos.push({
+                    url: urlInput.value.trim(),
+                    access_token: tokenInput.value
+                });
+            }
+        });
+
+        try {
+            const existingReposResponse = await apiCall<GitlabRepository[]>(`/api/containers/${currentContainer.id}/gitlab-repositories`);
+            const existingRepos = (existingReposResponse as GitlabRepository[]) || [];
+            
+            // Map existing repos by URL for easy lookup
+            const existingRepoMap = new Map<string, GitlabRepository>();
+            existingRepos.forEach(repo => existingRepoMap.set(repo.url, repo));
+            
+            // Track processed URLs to find deletions later
+            const processedUrls = new Set<string>();
+
+            // Process updates and creations
+            for (const repo of updatedRepos) {
+                processedUrls.add(repo.url);
+                const existingRepo = existingRepoMap.get(repo.url);
+                
+                if (existingRepo) {
+                    // Update existing repo if token is provided
+                    if (repo.access_token) {
+                        await apiCall(`/api/containers/${currentContainer.id}/gitlab-repositories/${encodeURIComponent(repo.url)}`, 'PUT', repo);
+                    }
+                } else {
+                    // Create new repo
+                    await apiCall(`/api/containers/${currentContainer.id}/gitlab-repositories`, 'POST', repo);
+                }
+            }
+
+            // Process deletions (repos that exist but were not in the updated list)
+            for (const existingRepo of existingRepos) {
+                if (!processedUrls.has(existingRepo.url)) {
+                    await apiCall(`/api/containers/${currentContainer.id}/gitlab-repositories/${encodeURIComponent(existingRepo.url)}`, 'DELETE');
+                }
+            }
+
+            showToast('GitLab repositories saved successfully', 'success');
+            closeGitlabModal();
+            await fetchContainers();
+        } catch (error) {
+            showToast('Failed to save GitLab repositories', 'error');
+            console.error('Error saving gitlab repos:', error);
+        }
+    }
 });

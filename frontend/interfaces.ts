@@ -1,3 +1,10 @@
+interface GitlabRepository {
+    id: number;
+    url: string;
+    access_token?: string;
+    container_id: number;
+}
+
 interface Container {
     id: number;
     name: string;
@@ -8,6 +15,7 @@ interface Container {
     ports?: string;
     public_url?: string;
     instructions?: string;
+    gitlab_repositories?: GitlabRepository[];
 }
 
 type ApiResponse<T> = T & {

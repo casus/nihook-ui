@@ -1090,3 +1090,105 @@ button[type="submit"] .loading {
     justify-content: center;
     font-weight: bold;
 }
+
+.gitlab-section {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #ddd;
+}
+
+.gitlab-tokens-btn {
+    background-color: #FC6D26;
+    color: white;
+}
+
+.gitlab-tokens-btn:hover {
+    background-color: #e05a1a;
+}
+
+.gitlab-modal-content {
+    width: 70%;
+    max-width: 800px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.gitlab-repos-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin: 20px 0;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.gitlab-repo-row {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    padding: 15px;
+    background: #f9f9f9;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+}
+
+.gitlab-repo-row .form-group {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.gitlab-repo-row .form-group label {
+    font-size: 12px;
+    margin-bottom: 5px;
+    color: #666;
+}
+
+.gitlab-repo-row input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.gitlab-repo-row input:focus {
+    outline: none;
+    border-color: #FC6D26;
+}
+
+.remove-gitlab-repo-btn {
+    background-color: #F44336;
+    color: white;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.remove-gitlab-repo-btn:hover {
+    background-color: #d32f2f;
+}
+
+.gitlab-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding-top: 15px;
+    border-top: 1px solid #ddd;
+}
+
+.gitlab-actions .save-btn {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.gitlab-actions .save-btn:hover {
+    background-color: #45a049;
+}
