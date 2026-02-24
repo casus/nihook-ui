@@ -142,31 +142,47 @@ export class GitlabManager {
             const existingRepos = (existingReposResponse as GitlabRepository[]) || [];
             
             const existingRepoMap = new Map<string, GitlabRepository>();
-            existingRepos.forEach(r => existingRepoMap.set(r.url, r));
+            (existingRepos as GitlabRepository[]).forEach(r => existingRepoMap.set(r.url, r));
             
             const processedUrls = new Set<string>();
+            let hasError = false;
 
             for (const repo of updatedRepos) {
                 processedUrls.add(repo.url);
                 const existing = existingRepoMap.get(repo.url);
+                let res: ApiResponse<any>;
                 
                 if (existing) {
                     if (repo.access_token) {
-                         await apiCall(ENDPOINTS.CONTAINERS.GITLAB.UPDATE(this.currentContainerId, repo.url), 'PUT', repo);
+                         res = await apiCall(ENDPOINTS.CONTAINERS.GITLAB.UPDATE(this.currentContainerId, repo.url), 'PUT', repo);
+                         if (res.error) {
+                             showToast(`Failed to update ${repo.url}: ${res.error}`, 'error');
+                             hasError = true;
+                         }
                     }
                 } else {
-                    await apiCall(ENDPOINTS.CONTAINERS.GITLAB.CREATE(this.currentContainerId), 'POST', repo);
+                    res = await apiCall(ENDPOINTS.CONTAINERS.GITLAB.CREATE(this.currentContainerId), 'POST', repo);
+                    if (res.error) {
+                        showToast(`Failed to create ${repo.url}: ${res.error}`, 'error');
+                        hasError = true;
+                    }
                 }
             }
             
             for (const existing of existingRepos) {
                 if (!processedUrls.has(existing.url)) {
-                    await apiCall(ENDPOINTS.CONTAINERS.GITLAB.DELETE(this.currentContainerId, existing.url), 'DELETE');
+                    const res = await apiCall(ENDPOINTS.CONTAINERS.GITLAB.DELETE(this.currentContainerId, existing.url), 'DELETE');
+                    if (res.error) {
+                        showToast(`Failed to delete ${existing.url}: ${res.error}`, 'error');
+                        hasError = true;
+                    }
                 }
             }
 
-            showToast('GitLab repositories saved successfully', 'success');
-            this.close();
+            if (!hasError) {
+                showToast('GitLab repositories saved successfully', 'success');
+                this.close();
+            }
             if (this.onUpdate) this.onUpdate();
             
         } catch (error) {

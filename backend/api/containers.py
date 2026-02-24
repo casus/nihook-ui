@@ -16,6 +16,7 @@ from backend.services.ssh import (
     get_ssh_client,
     execute_podman_command,
     execute_container_script,
+    curl_remote_url,
 )
 
 containers_bp = Blueprint("containers", __name__)
@@ -235,6 +236,7 @@ def get_gitlab_repositories(container_id):
          return jsonify({"error": "Container is not configured with a webhook host"}), 400
     
     webhook_url = f"{container.webhook_host.rstrip('/')}/api/gitlab-projects"
+    print(f"Fetching Gitlab repositories from webhook: {webhook_url}")
 
     headers = {}
     if container.webhook_user:
@@ -243,16 +245,26 @@ def get_gitlab_repositories(container_id):
         headers["X-Webhook-Secret"] = container.webhook_secret
 
     try:
-        resp = requests.get(
+        resp_text, status_code, error = curl_remote_url(
+            "GET",
             webhook_url,
             headers=headers,
-            timeout=30
+            timeout=30,
         )
 
-        if resp.status_code != 200:
-            return jsonify({"error": f"Failed to fetch Gitlab repositories from webhook: {resp.text}"}), 500
+        if error:
+            return jsonify({"error": f"Failed to fetch Gitlab repositories from webhook: {error}"}), 500
 
-        repo_data = resp.json()
+        if status_code != 200:
+             return jsonify({"error": f"Failed to fetch Gitlab repositories from webhook (Status {status_code}): {resp_text}"}), 500
+
+        try:
+            if (resp_text is None) or (resp_text.strip() == ""):
+                return jsonify({"error": "Empty response from webhook"}), 500
+            repo_data = json.loads(resp_text)
+        except json.JSONDecodeError:
+             return jsonify({"error": f"Invalid JSON response from webhook: {resp_text}"}), 500
+
         repos = []
         for key, value in repo_data.items():
             repos.append({
@@ -261,7 +273,7 @@ def get_gitlab_repositories(container_id):
             })
         return jsonify(repos), 200
 
-    except requests.RequestException as e:
+    except Exception as e:
         logger.error(f"Error fetching Gitlab repositories: {e}")
         return jsonify({"error": f"Failed to fetch Gitlab repositories: {str(e)}"}), 500
 
@@ -309,21 +321,25 @@ def create_gitlab_repository(container_id):
 
 
     try:
-        resp = requests.post(
+        resp_text, status_code, error = curl_remote_url(
+            "POST",
             webhook_url,
             headers=headers,
-            json=data_to_send,
+            json_data=data_to_send,
             timeout=30
         )
 
-        if resp.status_code != 201:
-            return jsonify({"error": f"Failed to create Gitlab repository via webhook: {resp.text}"}), 500
+        if error:
+            return jsonify({"error": f"Failed to create Gitlab repository via webhook: {error}"}), 500
+        
+        if status_code != 201:
+            return jsonify({"error": f"Failed to create Gitlab repository via webhook (Status {status_code}): {resp_text}"}), 500
 
-    except requests.RequestException as e:
+    except Exception as e:
         logger.error(f"Error creating Gitlab repository via webhook: {e}")
         return jsonify({"error": f"Failed to create Gitlab repository via webhook: {str(e)}"}), 500
 
-    return jsonify({"message": "Gitlab repository created successfully"}), 201
+    return jsonify({"message": "Gitlab repository created successfully", "details": resp_text}), 201
 
 
 @containers_bp.route(
@@ -367,17 +383,22 @@ def update_gitlab_repository(container_id, repo_url):
         "token": data.get("access_token", "")
     }
     try:
-        resp = requests.put(
+        resp_text, status_code, error = curl_remote_url(
+            "PUT",
             webhook_url,
             headers=headers,
-            json=data_to_send,
+            json_data=data_to_send,
             timeout=30
         )
+        print(f"Webhook response: {resp_text}, status: {status_code}, error: {error}, status_code: {status_code}")
 
-        if resp.status_code != 200:
-            return jsonify({"error": f"Failed to update Gitlab repository via webhook: {resp.text}"}), 500
+        if error:
+            return jsonify({"error": f"Failed to update Gitlab repository via webhook: {error}"}), 500
+            
+        if status_code != 200:
+             return jsonify({"error": f"Failed to update Gitlab repository via webhook (Status {status_code}): {resp_text}"}), 500
 
-    except requests.RequestException as e:
+    except Exception as e:
         logger.error(f"Error updating Gitlab repository via webhook: {e}")
         return jsonify({"error": f"Failed to update Gitlab repository via webhook: {str(e)}"}), 500
 
@@ -423,17 +444,21 @@ def delete_gitlab_repository(container_id, repo_url):
         "url": repo_url
     }
     try:
-        resp = requests.delete(
+        resp_text, status_code, error = curl_remote_url(
+            "DELETE",
             f"{webhook_url}",
             headers=headers,
-            json=data_to_send,
+            json_data=data_to_send,
             timeout=30
         )
 
-        if resp.status_code != 200:
-            return jsonify({"error": f"Failed to delete Gitlab repository via webhook: {resp.text}"}), 500
+        if error:
+            return jsonify({"error": f"Failed to delete Gitlab repository via webhook: {error}"}), 500
+        
+        if status_code != 200:
+             return jsonify({"error": f"Failed to delete Gitlab repository via webhook (Status {status_code}): {resp_text}"}), 500
 
-    except requests.RequestException as e:
+    except Exception as e:
         logger.error(f"Error deleting Gitlab repository via webhook: {e}")
         return jsonify({"error": f"Failed to delete Gitlab repository via webhook: {str(e)}"}), 500
 

@@ -30,6 +30,9 @@ class Config:
         'username': os.getenv('SSH_USERNAME', 'root'),
         'password': os.getenv('SSH_PASSWORD', ''),
         'key_filename': os.getenv('SSH_KEY_FILE', None),
+        'jump_hosts': os.getenv('SSH_JUMP_HOSTS', '').split(',') if os.getenv('SSH_JUMP_HOSTS') else [],
+        'jump_users': os.getenv('SSH_JUMP_USERS', '').split(',') if os.getenv('SSH_JUMP_USERS') else [],
+        'jump_ports': [int(p) for p in os.getenv('SSH_JUMP_PORTS', '').split(',')] if os.getenv('SSH_JUMP_PORTS') else [],
     }
 
     # Podman configuration
