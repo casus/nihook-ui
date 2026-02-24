@@ -15,13 +15,35 @@
             </div>
             <div class="auth-info" id="auth-info">
                 <span id="username-display"></span>
+                <button id="admin-panel-btn" class="admin-btn" style="display: none;">Admin Panel</button>
                 <button id="logout-btn" class="logout-btn">Logout</button>
             </div>
         </div>
     </nav>
     <div class="main-content">
-        <div class="table-container">
-            <h2>Your Containers</h2>
+        <!-- Admin Panel Section -->
+        <div id="admin-panel" style="display: none;">
+            <h2>User Management</h2>
+            <table id="users-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- User rows will be added here -->
+                </tbody>
+            </table>
+            <hr>
+            <h2>All Containers</h2>
+            <!-- Reuse or extend Container Table for Admin -->
+        </div>
+
+        <div class="table-container" id="containers-view">
+            <h2 id="containers-title">Your Containers</h2>
             <button id="create-container-btn" class="create-btn">Create New Container</button>
             <table id="containers-table">
             <thead>
@@ -55,6 +77,11 @@
             </form>
             <div class="gitlab-section">
                 <button id="edit-gitlab-tokens-btn" class="action-btn gitlab-tokens-btn">Edit GitLab Tokens</button>
+            </div>
+            <!-- Admin only: Change owner -->
+            <div id="owner-change-section" class="form-group" style="display: none;">
+                <label for="owner-select">Owner:</label>
+                <select id="owner-select" name="owner_id"></select>
             </div>
         </div>
     </div>
@@ -133,6 +160,21 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script type="module" src="./out/app.js"></script>
+    <!-- User Role Modal -->
+    <div id="user-role-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Edit User Role</h2>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="is-admin-checkbox"> Is Admin
+                </label>
+            </div>
+            <button id="save-role-btn">Save</button>
+        </div>
+    </div>
+    
+    <script type="module" src="app.js"></script>
+    <script src="models/types.js" type="module"></script>
 </body>
 </html>

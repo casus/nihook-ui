@@ -3,6 +3,7 @@ from .extensions import db, jwt, migrate
 from .api.schemas import schemas_bp
 from .api.containers import containers_bp
 from .api.auth import auth_bp
+from .api.users import users_bp
 from .auth.jwt_callbacks import register_jwt_callbacks
 from .logging_config import setup_logging
 from .config import Config
@@ -25,5 +26,6 @@ def create_app():
     app.register_blueprint(auth_bp, url_prefix="/")
     app.register_blueprint(schemas_bp, url_prefix="/api/schemas")
     app.register_blueprint(containers_bp, url_prefix="/api/containers")
+    app.register_blueprint(users_bp, url_prefix="/api/users")
 
     return app

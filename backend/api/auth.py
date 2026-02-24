@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, render_template, send_from_directory
-from sqlalchemy import select
+from sqlalchemy import select, func
 from werkzeug.security import generate_password_hash, check_password_hash
 from backend.extensions import db
 from backend.models import User
@@ -30,6 +30,7 @@ def login():
                 "access_token": access_token,
                 "user_id": user.id,
                 "username": user.username,
+                "is_admin": user.is_admin,
             }
         ), 200
 
@@ -55,8 +56,16 @@ def register():
     if user:
         return jsonify({"error": "Email already exists"}), 400
 
+    # Check if this is the first user
+    stmt_count = select(func.count()).select_from(User)
+    user_count = db.session.execute(stmt_count).scalar()
+    
+    is_admin = False
+    if user_count == 0:
+        is_admin = True
+
     hashed_password = generate_password_hash(password)
-    new_user = User(username=username, email=email, password_hash=hashed_password)
+    new_user = User(username=username, email=email, password_hash=hashed_password, is_admin=is_admin)
     db.session.add(new_user)
     db.session.commit()
 

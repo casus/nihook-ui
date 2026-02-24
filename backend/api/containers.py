@@ -30,8 +30,16 @@ def get_containers():
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
+    
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
 
-    stmt = select(Container).where(Container.owner_id == current_user_id)
+    if current_user.is_admin:
+        stmt = select(Container)
+    else:
+        stmt = select(Container).where(Container.owner_id == current_user_id)
+    
     containers = db.session.execute(stmt).scalars().all()
 
     # Batch-update statuses with a single podman insGitlabRepositorypect call to save SSH roundtrips
@@ -98,9 +106,8 @@ def create_container():
     new_container = Container(
         name=data["name"],
         description=data.get("description", ""),
-        owner=current_user,
-        
     )
+    new_container.owner = current_user;
 
     # Create container on remote server using custom script
     # Build arguments for the spin_up script
@@ -131,9 +138,16 @@ def get_container(container_id):
     except ValueError:
         return jsonify({"error": "Invalid user identity in token"}), 401
 
-    stmt = select(Container).where(
-        Container.id == container_id, Container.owner_id == current_user_id
-    )
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    if current_user.is_admin:
+        stmt = select(Container).where(Container.id == container_id)
+    else:
+        stmt = select(Container).where(
+            Container.id == container_id, Container.owner_id == current_user_id
+        )
     container = db.session.execute(stmt).scalars().first()
 
     if not container:
@@ -157,15 +171,32 @@ def update_container(container_id):
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-    stmt = select(Container).where(
-        Container.id == container_id, Container.owner_id == current_user_id
-    )
-    container = db.session.execute(stmt).scalars().first()
+
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    if current_user.is_admin:
+        container = db.session.get(Container, container_id)
+    else:
+        stmt = select(Container).where(
+            Container.id == container_id, Container.owner_id == current_user_id
+        )
+        container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
 
     data = request.get_json()
+
+    # Admin functionality: Reassign owner
+    if "owner_id" in data and current_user.is_admin:
+        new_owner_id = data["owner_id"]
+        new_owner = db.session.get(User, new_owner_id)
+        if new_owner:
+            container.owner_id = new_owner_id
+        else:
+             return jsonify({"error": "New owner not found"}), 404
 
     # Update container properties
     if "name" in data:
@@ -185,10 +216,17 @@ def get_gitlab_repositories(container_id):
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
 
-    stmt = select(Container).where(
-        Container.id == container_id, Container.owner_id == current_user_id
-    )
-    container = db.session.execute(stmt).scalars().first()
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    if current_user.is_admin:
+        container = db.session.get(Container, container_id)
+    else:
+        stmt = select(Container).where(
+            Container.id == container_id, Container.owner_id == current_user_id
+        )
+        container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -235,10 +273,17 @@ def create_gitlab_repository(container_id):
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
 
-    stmt = select(Container).where(
-        Container.id == container_id, Container.owner_id == current_user_id
-    )
-    container = db.session.execute(stmt).scalars().first()
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    if current_user.is_admin:
+        container = db.session.get(Container, container_id)
+    else:
+        stmt = select(Container).where(
+            Container.id == container_id, Container.owner_id == current_user_id
+        )
+        container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -291,10 +336,17 @@ def update_gitlab_repository(container_id, repo_url):
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
 
-    stmt = select(Container).where(
-        Container.id == container_id, Container.owner_id == current_user_id
-    )
-    container = db.session.execute(stmt).scalars().first()
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    if current_user.is_admin:
+        container = db.session.get(Container, container_id)
+    else:
+        stmt = select(Container).where(
+            Container.id == container_id, Container.owner_id == current_user_id
+        )
+        container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -342,10 +394,17 @@ def delete_gitlab_repository(container_id, repo_url):
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
 
-    stmt = select(Container).where(
-        Container.id == container_id, Container.owner_id == current_user_id
-    )
-    container = db.session.execute(stmt).scalars().first()
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    if current_user.is_admin:
+        container = db.session.get(Container, container_id)
+    else:
+        stmt = select(Container).where(
+            Container.id == container_id, Container.owner_id == current_user_id
+        )
+        container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -391,10 +450,18 @@ def start_container(container_id):
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-    stmt = select(Container).where(
-        Container.id == container_id, Container.owner_id == current_user_id
-    )
-    container = db.session.execute(stmt).scalars().first()
+
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    if current_user.is_admin:
+        container = db.session.get(Container, container_id)
+    else:
+        stmt = select(Container).where(
+            Container.id == container_id, Container.owner_id == current_user_id
+        )
+        container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -424,10 +491,18 @@ def stop_container(container_id):
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-    stmt = select(Container).where(
-        Container.id == container_id, Container.owner_id == current_user_id
-    )
-    container = db.session.execute(stmt).scalars().first()
+
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    if current_user.is_admin:
+        container = db.session.get(Container, container_id)
+    else:
+        stmt = select(Container).where(
+            Container.id == container_id, Container.owner_id == current_user_id
+        )
+        container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -451,10 +526,18 @@ def restart_container(container_id):
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-    stmt = select(Container).where(
-        Container.id == container_id, Container.owner_id == current_user_id
-    )
-    container = db.session.execute(stmt).scalars().first()
+
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    if current_user.is_admin:
+        container = db.session.get(Container, container_id)
+    else:
+        stmt = select(Container).where(
+            Container.id == container_id, Container.owner_id == current_user_id
+        )
+        container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -483,10 +566,18 @@ def delete_container(container_id):
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
-    stmt = select(Container).where(
-        Container.id == container_id, Container.owner_id == current_user_id
-    )
-    container = db.session.execute(stmt).scalars().first()
+    
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    if current_user.is_admin:
+        container = db.session.get(Container, container_id)
+    else:
+        stmt = select(Container).where(
+            Container.id == container_id, Container.owner_id == current_user_id
+        )
+        container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -515,10 +606,17 @@ def list_container_logs(container_id):
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
 
-    stmt = select(Container).where(
-        Container.id == container_id, Container.owner_id == current_user_id
-    )
-    container = db.session.execute(stmt).scalars().first()
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    if current_user.is_admin:
+        container = db.session.get(Container, container_id)
+    else:
+        stmt = select(Container).where(
+            Container.id == container_id, Container.owner_id == current_user_id
+        )
+        container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404
@@ -567,11 +665,18 @@ def get_container_log(container_id, filename):
         current_user_id = int(get_jwt_identity())
     except Exception:
         return jsonify({"error": "Invalid user identity in token"}), 401
+    
+    current_user = db.session.get(User, current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
 
-    stmt = select(Container).where(
-        Container.id == container_id, Container.owner_id == current_user_id
-    )
-    container = db.session.execute(stmt).scalars().first()
+    if current_user.is_admin:
+        container = db.session.get(Container, container_id)
+    else:
+        stmt = select(Container).where(
+            Container.id == container_id, Container.owner_id == current_user_id
+        )
+        container = db.session.execute(stmt).scalars().first()
 
     if not container:
         return jsonify({"error": "Container not found"}), 404

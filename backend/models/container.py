@@ -17,11 +17,11 @@ class Container(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, init=False)
 
     name: Mapped[str] = mapped_column(String(120), nullable=False)
-    owner_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False, init=False)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=True, init=False)
     description: Mapped[Optional[str]] = mapped_column(String(500), default=None)
     status: Mapped[str] = mapped_column(String(20), default="stopped")
 
-    owner: Mapped["User"] = relationship("User", back_populates="containers", default=None)
+    owner: Mapped["User"] = relationship("User", back_populates="containers", default=None, init=False)
 
     # Additional container properties
     ports: Mapped[Optional[str]] = mapped_column(String(255), default=None)
@@ -55,6 +55,7 @@ class Container(Base):
             "webhook_host": self.webhook_host,
             "webhook_user": self.webhook_user,
             "webhook_secret": self.webhook_secret,
+            "owner_name": self.owner.username if self.owner else None
         }
 
         return data

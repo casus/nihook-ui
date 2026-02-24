@@ -1,6 +1,6 @@
 from typing import List, TYPE_CHECKING
 
-from sqlalchemy import String, Integer
+from sqlalchemy import String, Integer, Boolean
 from sqlalchemy.orm import Mapped, relationship, mapped_column
 
 from backend.extensions import Base
@@ -28,6 +28,13 @@ class User(Base):
 
     password_hash: Mapped[str] = mapped_column(
         String(128),
+        nullable=False
+    )
+    
+    is_admin: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
         nullable=False
     )
 

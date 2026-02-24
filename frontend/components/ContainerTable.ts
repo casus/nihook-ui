@@ -5,14 +5,17 @@ import { ContainerInfoModal } from './InfoModal.js';
 import { SettingsModal } from './SettingsModal.js';
 import { LogsModal } from './LogsModal.js';
 import { ENDPOINTS } from '../services/endpoints.js';
+import { getCurrentUser } from '../services/auth.js';
 
 export class ContainerTable {
     private tableBody: HTMLTableSectionElement;
+    private tableHead: HTMLTableSectionElement;
     private containers: Container[] = [];
     private previousContainers: Container[] = [];
     private containerUpdateStatus: Map<number, 'new' | 'updated'> = new Map();
     private isLoading = false;
-    
+    private isAdmin = false;
+
     // Components to trigger
     private infoModal: ContainerInfoModal;
     private settingsModal: SettingsModal;
@@ -25,12 +28,33 @@ export class ContainerTable {
         logsModal: LogsModal
     ) {
         this.tableBody = document.querySelector(`#${tableId} tbody`) as HTMLTableSectionElement;
+        this.tableHead = document.querySelector(`#${tableId} thead`) as HTMLTableSectionElement;
         this.infoModal = infoModal;
         this.settingsModal = settingsModal;
         this.logsModal = logsModal;
+        
+        const user = getCurrentUser();
+        this.isAdmin = user.is_admin;
 
         if (!this.tableBody) {
              console.error(`Table #${tableId} tbody not found`);
+        }
+        
+        // Add Owner header if admin
+        if (this.isAdmin && this.tableHead) {
+            const headerRow = this.tableHead.querySelector('tr');
+            if (headerRow) {
+               // Check if Owner header already exists
+               if (!headerRow.querySelector('.header-owner')) {
+                   const th = document.createElement('th');
+                   th.className = 'header-owner';
+                   th.textContent = 'Owner';
+                   // Insert before Status or Settings
+                   // Assuming columns: Name, Status, Settings
+                   // Let's insert after Name (index 1)
+                   headerRow.insertBefore(th, headerRow.children[1]);
+               }
+            }
         }
     }
 
@@ -129,16 +153,18 @@ export class ContainerTable {
         if (!this.tableBody) return;
         this.tableBody.innerHTML = '';
 
+        const colSpan = this.isAdmin ? 4 : 3;
+
         if (this.isLoading) {
             const row = document.createElement('tr');
-            row.innerHTML = '<td colspan="4" style="text-align:center">Loading containers...</td>';
+            row.innerHTML = `<td colspan="${colSpan}" style="text-align:center">Loading containers...</td>`;
             this.tableBody.appendChild(row);
             return;
         }
 
         if (this.containers.length === 0) {
             const row = document.createElement('tr');
-            row.innerHTML = '<td colspan="4" style="text-align:center">No containers found. Create your first container!</td>';
+            row.innerHTML = `<td colspan="${colSpan}" style="text-align:center">No containers found. Create your first container!</td>`;
             this.tableBody.appendChild(row);
             return;
         }
@@ -148,21 +174,31 @@ export class ContainerTable {
             
             // Name
             const nameCell = document.createElement('td');
-            const nameLink = document.createElement('a');
-            nameLink.href = '#';
-            nameLink.textContent = container.name;
-            nameLink.className = 'container-name-link';
+            const nameLink = document.createElement('span'); // Changed from 'a' to 'span' or keep 'a' with href="#"
+            // Actually keeping implementation but fixing the logic
+            const nameContent = document.createElement('a');
+            nameContent.href = '#';
+            nameContent.textContent = container.name;
+            nameContent.className = 'container-name-link';
             
             const status = this.containerUpdateStatus.get(container.id);
-            if (status === 'new') nameLink.classList.add('container-new');
-            else if (status === 'updated') nameLink.classList.add('container-updated');
+            // Highlight new/updated
+            if (status === 'new') nameContent.classList.add('container-new');
+            else if (status === 'updated') nameContent.classList.add('container-updated');
             
-            nameLink.addEventListener('click', (e) => {
+            nameContent.addEventListener('click', (e) => {
                 e.preventDefault();
                 this.infoModal.open(container);
             });
-            nameCell.appendChild(nameLink);
+            nameCell.appendChild(nameContent);
             row.appendChild(nameCell);
+
+            // Owner (Admin only)
+            if (this.isAdmin) {
+                const ownerCell = document.createElement('td');
+                ownerCell.textContent = container.owner_name || 'Unknown';
+                row.appendChild(ownerCell);
+            }
 
             // Status
             const statusCell = document.createElement('td');

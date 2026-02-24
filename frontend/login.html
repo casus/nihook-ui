@@ -144,6 +144,11 @@
                     localStorage.setItem('access_token', data.access_token);
                     localStorage.setItem('user_id', data.user_id);
                     localStorage.setItem('username', data.username);
+                    if (data.is_admin) {
+                        localStorage.setItem('is_admin', 'true');
+                    } else {
+                        localStorage.removeItem('is_admin');
+                    }
                     
                     window.location.href = '/';
                 } else {

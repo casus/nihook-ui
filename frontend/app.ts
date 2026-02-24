@@ -5,6 +5,7 @@ import { SettingsModal } from './components/SettingsModal.js';
 import { ContainerInfoModal } from './components/InfoModal.js';
 import { LogsModal } from './components/LogsModal.js';
 import { GitlabManager } from './components/GitlabModal.js';
+import { AdminManager } from './components/AdminManager.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // Auth Check
@@ -17,6 +18,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const display = document.getElementById('username-display');
     if (display) display.textContent = `Logged in as: ${user.username}`;
     
+    // Admin Panel Logic
+    const adminPanelBtn = document.getElementById('admin-panel-btn');
+    const adminPanel = document.getElementById('admin-panel');
+    let adminManager: AdminManager | null = null;
+    
+    if (user.is_admin) {
+        if (adminPanelBtn) {
+            adminPanelBtn.style.display = 'inline-block';
+            adminPanelBtn.addEventListener('click', () => {
+                if (adminPanel) {
+                    const isHidden = adminPanel.style.display === 'none';
+                    adminPanel.style.display = isHidden ? 'block' : 'none';
+                    adminPanelBtn.textContent = isHidden ? 'Close Admin Panel' : 'Admin Panel';
+                    
+                    if (isHidden && !adminManager) {
+                        adminManager = new AdminManager('users-table', () => {});
+                        adminManager.fetchUsers();
+                    }
+                }
+            });
+        }
+    }
+
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => logout());
