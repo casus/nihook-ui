@@ -40,10 +40,20 @@ export interface Container {
     public_url?: string;
     instructions?: string;
     gitlab_repositories?: GitlabRepository[];
+    owner_id?: number; 
+    owner_name?: string;
 }
 
 export interface AuthResponse {
     access_token: string;
     user_id: number;
     username: string;
+    is_admin: boolean;
+}
+
+export interface User {
+    id: number;
+    username: string;
+    email?: string;
+    is_admin: boolean;
 }
