@@ -117,6 +117,48 @@ python app.py
 The application will be available at `http://localhost:5000`.
 
 
+## 🐳 Running with Podman / Docker (Recommended)
+
+The project includes a multi-stage `Dockerfile` that compiles the TypeScript frontend, sets up the Python runtime, and automatically handles database migrations.
+
+### 1. Configuration
+Copy the `.env.example` file to `.env`:
+```bash
+cp .env.example .env
+```
+Inside `.env`, if you are utilizing SSH keys to connect to remote Podman servers, point the `SSH_KEY_FILE` directly to `/app/.ssh/id_rsa`. (This corresponds to where the key will be inside the container).
+
+### 2. Prepare the Database Directory
+The database is using SQLite. To avoid data loss when your container stops/starts, create an `instance/` folder on your host machine to store the `.db` file locally safely:
+```bash
+mkdir -p instance
+```
+
+### 3. Build & Run
+You can run via the included helper script (just verify the path to your SSH key on your laptop inside the script):
+```bash
+chmod +x podman_run.sh
+./podman_run.sh
+```
+
+**Or manually via Podman CLI:**
+```bash
+# Build the multi-stage image
+podman build -t nihook-ui .
+
+# Run the container 
+# IMPORTANT: Map your local SSH key to /app/.ssh/id_rsa and append :ro,z 
+# The ':ro,z' is crucial because it makes it read-only and explicitly tells SELinux to let the container read it.
+podman run -d \
+  --name nihook-ui \
+  -v /home/YOUR_LOCAL_USER/.ssh/your_key:/app/.ssh/id_rsa:ro,z \
+  -v $(pwd)/instance:/app/instance:Z \
+  --env-file .env \
+  -p 5000:5000 \
+  nihook-ui
+```
+*Note: Due to IPv6 setups on modern machines, navigate to `http://127.0.0.1:5000` instead of `localhost:5000` to access the UI.*
+
 ## API Endpoints
 
 ### Authentication
