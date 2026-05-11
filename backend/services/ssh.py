@@ -2,9 +2,11 @@ from backend.config import Config
 import paramiko
 import logging
 
+import subprocess
+
 logger = logging.getLogger(__name__)
 
-
+USE_SSH = Config.USE_SSH
 SSH_CONFIG = Config.SSH_CONFIG
 CONTAINER_SCRIPTS_DIR = Config.CONTAINER_SCRIPTS_DIR
 NIHOOK_FOLDER = Config.NIHOOK_FOLDER
@@ -125,12 +127,48 @@ def get_ssh_client():
         return None
 
 
+def execute_command(command):
+    """Execute a general shell command on the remote server or locally"""
+    if not USE_SSH:
+        try:
+            result = subprocess.run(command, shell=True, capture_output=True, text=True)
+            return result.stdout.strip(), result.stderr.strip(), result.returncode
+        except Exception as e:
+            return "", str(e), 1
+            
+    client = get_ssh_client()
+    if not client:
+        return "", "Failed to connect to remote server", 1
+        
+    try:
+        stdin, stdout, stderr = client.exec_command(command)
+        out = stdout.read().decode().strip()
+        err = stderr.read().decode().strip()
+        exit_status = stdout.channel.recv_exit_status()
+        return out, err, exit_status
+    except Exception as e:
+        logger.error(f"Error executing command {command}: {e}")
+        return "", str(e), 1
+    finally:
+        client.close()
+
 def execute_podman_command(command):
-    """Execute a podman command on the remote server"""
+    """Execute a podman command on the remote server or locally"""
+    print("Executing podman command:", command)
+    if not USE_SSH:
+        try:
+            result = subprocess.run(f"podman {command}", shell=True, capture_output=True, text=True)
+            if result.returncode != 0:
+                logger.error("Podman command failed (exit %s): %s\nstderr: %s", result.returncode, command, result.stderr)
+                return None, result.stderr or f"podman exited with status {result.returncode}"
+            return result.stdout.strip(), None
+        except Exception as e:
+            logger.error("Exception during local podman command execution: \n%s \n%s", e, command)
+            return None, str(e)
+
     client = get_ssh_client()
     if not client:
         return None, "Failed to connect to remote server"
-    print("Executing podman command:", command)
     try:
         stdin, stdout, stderr = client.exec_command(f"podman {command}")
         out_bytes = stdout.read()
@@ -160,12 +198,24 @@ def execute_podman_command(command):
 
 
 def execute_container_script(script_name, container_folder, additional_args=""):
-    """Execute a custom container management script on the remote server"""
+    """Execute a custom container management script on the remote server or locally"""
+    full_command = f"cd {NIHOOK_FOLDER} && {CONTAINER_SCRIPTS_DIR}/{script_name} {container_folder if container_folder else ''} {additional_args}"
+    
+    if not USE_SSH:
+        try:
+            result = subprocess.run(full_command, shell=True, capture_output=True, text=True)
+            if result.returncode != 0:
+                logger.error("Container script failed (exit %s): %s\nstderr: %s", result.returncode, full_command, result.stderr)
+                return None, result.stderr or f"script exited with status {result.returncode}"
+            return result.stdout.strip(), None
+        except Exception as e:
+            logger.error("Exception during local container script execution: \n%s \n%s", e, full_command)
+            return None, str(e)
+
     client = get_ssh_client()
     if not client:
         return None, "Failed to connect to remote server"
 
-    full_command = f"cd {NIHOOK_FOLDER} && {CONTAINER_SCRIPTS_DIR}/{script_name} {container_folder if container_folder else ''} {additional_args}"
     try:
         # Change to the scripts directory and execute the script
         stdin, stdout, stderr = client.exec_command(full_command)
@@ -193,20 +243,10 @@ def execute_container_script(script_name, container_folder, additional_args=""):
     finally:
         client.close()
 
-def curl_remote_url(method, url, headers=None, json_data=None, timeout=30):
-    """Execute a curl command on the remote server to fetch a URL.
+def curl_remote_url(method, url, headers=None, json_data=None, form_data=None, files=None, timeout=30):
+    """Execute a curl command on the remote server or locally to fetch a URL.
     Returns: (response_body, status_code, error_message)
     """
-    client = get_ssh_client()
-    if not client:
-        return None, 0, "Failed to connect to remote server"
-    
-    # Construct curl command
-    # -w "%{http_code}" prints the status code at the end
-    # We output purely the body and then the status code.
-    # To cleanly separate them without relying on newlines in the body (or lack thereof),
-    # we can use a delimiter, but standard practice often just appends. 
-    # Let's use a unique separator that won't appear in JSON.
     separator = "___HTTP_CODE___"
     
     cmd_parts = ["curl", "-k", "-s", "-X", method, "-w", f"'{separator}%{{http_code}}'"]
@@ -216,24 +256,62 @@ def curl_remote_url(method, url, headers=None, json_data=None, timeout=30):
     
     if headers:
         for key, value in headers.items():
-            # Escape single quotes in header values
             safe_value = str(value).replace("'", "'\\''")
             cmd_parts.extend(["-H", f"'{key}: {safe_value}'"])
             
     if json_data:
         import json
-        # JSON dump and escape for shell command - usage of single quotes for the data
         json_str = json.dumps(json_data).replace("'", "'\\''")
         cmd_parts.extend(["-H", "'Content-Type: application/json'"])
         cmd_parts.extend(["-d", f"'{json_str}'"])
+
+    if form_data:
+        for key, value in form_data.items():
+            safe_value = str(value).replace("'", "'\\''")
+            cmd_parts.extend(["-F", f"'{key}={safe_value}'"])
+
+    file_content = None
+    if files:
+        for key, (filename, content, mime_type) in files.items():
+            # Support one file via stdin
+            cmd_parts.extend(["-F", f"'{key}=@-;filename={filename};type={mime_type}'"])
+            file_content = content
+            break  # Only support one file for now
         
     cmd_parts.append(f"'{url}'")
     
     full_command = " ".join(cmd_parts)
-    logger.info(f"Executing remote curl: {method} {url}")
+    logger.info(f"Executing curl: {method} {url}")
     
+    if not USE_SSH:
+        try:
+            result = subprocess.run(full_command, shell=True, capture_output=True, text=True, input=file_content)
+            if result.returncode != 0:
+                logger.error(f"Local curl failed (exit {result.returncode}): {result.stderr}")
+                return None, 0, result.stderr or f"curl exited with {result.returncode}"
+            
+            raw_output = result.stdout
+            parts = raw_output.rsplit(separator, 1)
+            
+            if len(parts) == 2:
+                body = parts[0]
+                status_code = int(parts[1])
+                return body, status_code, None
+            else:
+                return raw_output, 0, "Failed to parse HTTP status code"
+        except Exception as e:
+            return None, 0, str(e)
+
+    client = get_ssh_client()
+    if not client:
+        return None, 0, "Failed to connect to remote server"
+
     try:
         stdin, stdout, stderr = client.exec_command(full_command)
+        if file_content:
+            stdin.write(file_content)
+            stdin.channel.shutdown_write()
+            
         out_bytes = stdout.read()
         err_bytes = stderr.read()
         raw_output = out_bytes.decode() # Don't strip yet
@@ -271,6 +349,9 @@ def curl_remote_url(method, url, headers=None, json_data=None, timeout=30):
 
 def ensure_ssh_available():
     """Check SSH connectivity before starting the app"""
+    if (not USE_SSH):
+        logger.info("SSH is disabled via configuration; skipping SSH preflight check.")
+        return True
     client = get_ssh_client()
     if client is None:
         logger.error(

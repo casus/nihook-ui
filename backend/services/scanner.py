@@ -1,13 +1,27 @@
 import os
 import re
 import logging
+import subprocess
 from sqlalchemy import select
 from backend.models import Container, User 
 from backend.extensions import db
-from backend.config import Config
+from backend.config import Config, USE_SSH
 from backend.services.ssh import get_ssh_client
 
 logger = logging.getLogger(__name__)
+
+def _run_cmd(cmd, client=None):
+    if not USE_SSH:
+        try:
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            return result.stdout.strip(), result.stderr.strip()
+        except Exception as e:
+            return "", str(e)
+    else:
+        if not client:
+            return "", "No SSH client"
+        stdin, stdout, stderr = client.exec_command(cmd)
+        return stdout.read().decode().strip(), stderr.read().decode().strip()
 
 def scan_and_import_containers():
     """
@@ -25,18 +39,19 @@ def scan_and_import_containers():
     # We need to run inside an app context, assumed caller provides it.
     logger.info(f"Scanning {nihook_folder} for existing containers...")
     
-    client = get_ssh_client()
-    if not client:
-        logger.error("Failed to connect via SSH for scanning containers.")
-        return
+    client = None
+    if USE_SSH:
+        client = get_ssh_client()
+        if not client:
+            logger.error("Failed to connect via SSH for scanning containers.")
+            return
 
     try:
         # List directories in NIHOOK_FOLDER
         # Use find to locate directories matching pattern
         # Be careful about injection if nihook_folder comes from untrusted source (config should be trusted)
         cmd = f"find {nihook_folder} -maxdepth 1 -type d -name 'nocodb_webhook_instance_*'"
-        stdin, stdout, stderr = client.exec_command(cmd)
-        output = stdout.read().decode().strip()
+        output, _ = _run_cmd(cmd, client)
         
         if not output:
              logger.info("No matching container folders found in NIHOOK_FOLDER.")
@@ -75,9 +90,7 @@ def scan_and_import_containers():
             readme_path = f"{dir_path}/README.md"
             # execute cat command
             cat_cmd = f"cat {readme_path}"
-            stdin, stdout, stderr = client.exec_command(cat_cmd)
-            readme_content = stdout.read().decode().strip()
-            error_msg = stderr.read().decode().strip()
+            readme_content, error_msg = _run_cmd(cat_cmd, client)
 
             if not readme_content or "No such file" in error_msg:
                 logger.warning(f"No README.md found in {dir_path} or empty. Skipping.")
@@ -92,8 +105,7 @@ def scan_and_import_containers():
                  # Get all containers and their ports
                  # Command: podman ps -a --format "{{.ID}} {{.Ports}}"
                  ps_cmd = 'podman ps -a --format "{{.ID}} {{.Ports}}"'
-                 stdin, stdout, stderr = client.exec_command(ps_cmd)
-                 ps_output = stdout.read().decode().strip()
+                 ps_output, _ = _run_cmd(ps_cmd, client)
                  
                  found_id = None
                  if ps_output:
@@ -133,4 +145,5 @@ def scan_and_import_containers():
         logger.error(f"Error during container scan: {e}")
         db.session.rollback()
     finally:
-        client.close()
+        if client:
+            client.close()

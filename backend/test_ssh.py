@@ -7,6 +7,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+USE_SSH = os.getenv('USE_SSH', 'True').lower() in ('true', '1', 't')
+
+if not USE_SSH:
+    print("USE_SSH is set to False in environment. Skipping SSH test.")
+    exit(0)
+
 SSH_CONFIG = {
     'hostname': os.getenv('SSH_HOSTNAME', 'localhost'),
     'port': int(os.getenv('SSH_PORT', 22)),

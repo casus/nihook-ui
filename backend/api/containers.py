@@ -13,7 +13,7 @@ from flask_jwt_extended import (
 from backend.config import SPIN_UP_SCRIPT, RESTART_SCRIPT, RESUME_SCRIPT, NIHOOK_FOLDER
 import logging
 from backend.services.ssh import (
-    get_ssh_client,
+    execute_command,
     execute_podman_command,
     execute_container_script,
     curl_remote_url,
@@ -652,16 +652,11 @@ def list_container_logs(container_id):
     # List log files in the container's logs directory
     logs_dir = f"{container.folder_path}/logs"
 
-    client = get_ssh_client()
-    if not client:
-        return jsonify({"error": "Failed to connect to remote server"}), 500
-
     try:
         # Check if logs directory exists
         command_to_execute = f"ls {logs_dir} 2>/dev/null"
-        stdin, stdout, stderr = client.exec_command(command_to_execute)
+        log_files, err, status = execute_command(command_to_execute)
         print("Executed command:", command_to_execute)
-        log_files = stdout.read().decode().strip()
 
         if not log_files:
             return jsonify({"files": []}), 200
@@ -678,8 +673,6 @@ def list_container_logs(container_id):
     except Exception as e:
         logger.error(f"Error listing log files: {e}")
         return jsonify({"error": f"Failed to list log files: {str(e)}"}), 500
-    finally:
-        client.close()
 
 
 @containers_bp.route("<int:container_id>/logs/<filename>", methods=["GET"])
@@ -718,16 +711,11 @@ def get_container_log(container_id, filename):
 
     log_file_path = f"{container.folder_path}/logs/{filename}"
 
-    client = get_ssh_client()
-    if not client:
-        return jsonify({"error": "Failed to connect to remote server"}), 500
-
     try:
         # Check if file exists and get its content
-        stdin, stdout, stderr = client.exec_command(f"cat {log_file_path} 2>/dev/null")
-        content = stdout.read().decode("utf-8", errors="replace")
+        content, err, status = execute_command(f"cat {log_file_path} 2>/dev/null")
 
-        if not content:
+        if status != 0 or not content:
             return jsonify({"error": "Log file is empty or does not exist"}), 404
 
         return jsonify(
@@ -737,5 +725,3 @@ def get_container_log(container_id, filename):
     except Exception as e:
         logger.error(f"Error reading log file {filename}: {e}")
         return jsonify({"error": f"Failed to read log file: {str(e)}"}), 500
-    finally:
-        client.close()
