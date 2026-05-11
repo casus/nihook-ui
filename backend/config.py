@@ -8,6 +8,7 @@ load_dotenv()
 class Config:
     # Flask configuration
     DEBUG = os.getenv('FLASK_DEBUG', 'False') == 'True'
+    PORT = int(os.getenv('PORT', 5000))
 
     # Database configuration
     SQLALCHEMY_DATABASE_URI = os.getenv(
@@ -24,6 +25,7 @@ class Config:
     JWT_COOKIE_CSRF_PROTECT = False
 
     # SSH configuration for Podman
+    USE_SSH = os.getenv('USE_SSH', 'True').lower() in ('true', '1', 't')
     SSH_CONFIG = {
         'hostname': os.getenv('SSH_HOSTNAME', 'localhost'),
         'port': int(os.getenv('SSH_PORT', 22)),
@@ -52,6 +54,8 @@ class Config:
 
 # Allow direct imports (e.g. `from backend.config import DEBUG`)
 DEBUG = Config.DEBUG
+PORT = Config.PORT
+USE_SSH = Config.USE_SSH
 SSH_CONFIG = Config.SSH_CONFIG
 NIHOOK_FOLDER = Config.NIHOOK_FOLDER
 CONTAINER_SCRIPTS_DIR = Config.CONTAINER_SCRIPTS_DIR

@@ -1,7 +1,6 @@
 import json
 from flask import Blueprint, request, jsonify
 from sqlalchemy import select
-import requests
 from backend.extensions import db
 from backend.models import Schema, Container
 from flask_jwt_extended import (
@@ -10,7 +9,8 @@ from flask_jwt_extended import (
 )
 import logging
 
-from  backend.models import User
+from backend.models import User
+from backend.services.ssh import curl_remote_url
 
 
 logger = logging.getLogger(__name__)
@@ -268,17 +268,18 @@ def create_table_from_schema():
     }
 
     try:
-        resp = requests.post(
+        resp_text, status_code, err = curl_remote_url(
+            "POST",
             webhook_url,
-            data=form_data,
-            files=files,
             headers=headers,
+            form_data=form_data,
+            files=files,
             timeout=30
         )
         
-        if resp.status_code >= 200 and resp.status_code < 300:
+        if status_code >= 200 and status_code < 300:
             try:
-                resp_json = resp.json()
+                resp_json = json.loads(resp_text)
 
                 # Trigger upload-all-commits
                 if data.get("create_gitlab_webhook"):
@@ -289,11 +290,13 @@ def create_table_from_schema():
                             upload_url = f"{container.webhook_host.rstrip('/')}/webhooks/upload-all-commits"
                             custom_headers = headers.copy()
                             custom_headers["X-Webhook-Nocodbtableid"] = str(table_id)
+                            print(f"Triggering upload-all-commits at {upload_url} with headers {custom_headers} and data {{'project_url': {data.get('gitlab_repo_url')}}}")
                             
-                            requests.post(
+                            curl_remote_url(
+                                "POST",
                                 upload_url,
                                 headers=custom_headers,
-                                json={"project_url": data.get("gitlab_repo_url")},
+                                json_data={"project_url": data.get("gitlab_repo_url")},
                                 timeout=30
                             )
                         except Exception as e:
@@ -301,14 +304,14 @@ def create_table_from_schema():
 
                 return jsonify(resp_json), 200
             except:
-                return jsonify({"message": "Table created successfully", "upstream_response": resp.text}), 200
+                return jsonify({"message": "Table created successfully", "upstream_response": resp_text}), 200
         else:
             return jsonify({
-                "error": f"Upstream error: {resp.status_code}", 
-                "details": resp.text
-            }), resp.status_code
+                "error": f"Upstream error: {status_code}", 
+                "details": resp_text
+            }), status_code
 
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         logger.error(f"Error calling webhook: {e}")
         return jsonify({"error": f"Failed to contact container: {str(e)}"}), 502
 

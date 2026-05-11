@@ -1,7 +1,9 @@
+import os
 from backend import create_app
 import logging
 from backend.services.ssh import ensure_ssh_available
 from backend.services.scanner import scan_and_import_containers
+from backend.config import PORT
 
 logger = logging.getLogger(__name__)
 
@@ -20,4 +22,4 @@ if __name__ == "__main__":
         except Exception as e:
              logger.error(f"Startup scan failed: {e}")
 
-    app.run(debug=True)
+    app.run(debug=True, port=PORT)
