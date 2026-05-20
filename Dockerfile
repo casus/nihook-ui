@@ -19,7 +19,7 @@ RUN npm run build
 # ========================================
 # Stage 2: Setup Backend and Runtime
 # ========================================
-FROM python:3.14-slim
+FROM python:3.12-slim
 WORKDIR /app
 
 # Install system dependencies necessary for SSH connections to work
@@ -39,12 +39,12 @@ COPY app.py ./
 # Copy the frontend (which now includes the compiled JS in frontend/out) from the builder stage
 COPY --from=frontend-builder /app/frontend/ ./frontend/
 
-# Ensure the Flask app binds to all interfaces in a container (0.0.0.0)
-ENV FLASK_RUN_HOST=0.0.0.0
+# Ensure the Flask app binds to all interfaces in a container (0.0.0.0 and ::)
+ENV FLASK_RUN_HOST=::
 # We need FLASK_APP set so that "flask db upgrade" understands how to find our app
 ENV FLASK_APP=app.py
-# The port we expect to expose (based on your .env)
-EXPOSE 8080
+# The port we expect to expose 
+# EXPOSE 8080
 
 # Note: Using flask run requires FLASK_APP to be set or we can just run app.py
 # If using app.py, make sure app.run(host='0.0.0.0') is used in app.py if you want it accessible externally.

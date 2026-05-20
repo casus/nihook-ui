@@ -25,7 +25,7 @@ if __name__ == "__main__":
 
     if DEBUG:
         logger.info(f"Starting development server on port {PORT}...")
-        app.run(host="0.0.0.0", port=PORT, debug=True)
+        app.run(host="::", port=PORT, debug=True)
     else:
         logger.info(f"Starting production WSGI server on port {PORT}...")
-        serve(app, host="0.0.0.0", port=PORT)
+        serve(app, listen=f"*:{PORT}")
