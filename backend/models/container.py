@@ -86,7 +86,7 @@ class Container(Base):
             self.webhook_secret = details["webhook_secret"]
 
     @staticmethod
-    def parse_spinup_output(output: str, nihook_folder: str):
+    def parse_spinup_output(output: str, nihook_folder: str) -> dict:
         """Parse the spin-up output and return podman_id, ports, folder_path, public_url, instructions, nocodb_token, nocodb_ssl_cert, webhook_host, webhook_user, and webhook_secret.
 
         Args:
