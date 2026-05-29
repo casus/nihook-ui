@@ -4,6 +4,16 @@ This directory contains the `create_table_and_webhook.py` script, which is used 
 
 ## Setup
 
+**Note:** Before running the script, ensure you have installed the required Python dependencies for the backend. Check the root `README.md` for full installation instructions, or simply run from the project root:
+```bash
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+
+# Install dependencies
+pip install -r backend/requirements.txt
+```
+
 The script requires certain configurations to be set. You can either use command-line arguments or define them in a `.env` file located in the `cli/` directory.
 
 To get started with the `.env` approach, copy the example environment file:

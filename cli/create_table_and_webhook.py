@@ -34,6 +34,11 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--schema_location",
+        default=os.getenv("SCHEMA_LOCATION", "local")
+    )
+
+    parser.add_argument(
         "--path_to_schema",
         default=os.getenv("PATH_TO_SCHEMA")
     )
@@ -112,15 +117,26 @@ if __name__ == "__main__":
     form_data["webhook_secret"] = details.get("webhook_secret")
 
     # Prepare file: load file from path_to_schema
-    if not os.path.isfile(args.path_to_schema):
-        print(f"Schema file not found at {args.path_to_schema}. Exiting.")
-        raise SystemExit(1) 
-    with open(args.path_to_schema, "r") as f:
-        schema_json = f.read()
+    schema_json = None
+    if args.schema_location == "remote":
+        cat_cmd = f"cat {args.path_to_schema}"
+        schema_content, error_msg = _run_cmd(cat_cmd, get_ssh_client())
+        if not schema_content or "No such file" in error_msg:
+            print(f"Remote schema file not found at {args.path_to_schema} or empty. Exiting.")
+            raise SystemExit(1)
+        schema_json = schema_content
+    else:
+        if not os.path.isfile(args.path_to_schema):
+            print(f"Local schema file not found at {args.path_to_schema}. Exiting.")
+            raise SystemExit(1) 
+        with open(args.path_to_schema, "r") as f:
+            schema_json = f.read()
+
     files = {
         "schema": ("schema.json", schema_json, "application/json")
     }
     try:
+        print(f"Sending POST request to {webhook_url}...")
         resp_text, status_code, err = curl_remote_url(
             "POST",
             webhook_url,
@@ -153,6 +169,11 @@ if __name__ == "__main__":
                         print("Triggered upload-all-commits successfully.")
                     except Exception as e:
                         print(f"Failed to trigger upload-all-commits: {e}")
+        else:
+            print(f"Request failed with status code {status_code}")
+            print(f"Response: {resp_text}")
+            if err:
+                print(f"Curl error: {err}")
     except Exception as e:
         print(f"Failed to contact container: {e}")
 
