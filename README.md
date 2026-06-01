@@ -26,7 +26,7 @@ nihook-ui/
 └── tsconfig.json            # TypeScript Configuration
 ```
 
-## Setup & Installation
+## Option 1: Setup & Installation
 
 ### Prerequisites
 
@@ -117,7 +117,7 @@ python app.py
 The application will be available at `http://localhost:5000`.
 
 
-## 🐳 Running with Podman / Docker (Recommended)
+## Option 2: 🐳 Running with Podman / Docker (Recommended)
 
 The project includes a multi-stage `Dockerfile` that compiles the TypeScript frontend, sets up the Python runtime, and automatically handles database migrations.
 
@@ -127,6 +127,9 @@ Copy the `.env.example` file to `.env`:
 cp .env.example .env
 ```
 Inside `.env`, if you are utilizing SSH keys to connect to remote Podman servers, point the `SSH_KEY_FILE` directly to `/app/.ssh/id_rsa`. (This corresponds to where the key will be inside the container).
+
+The default is to run NiHook-UI on your local laptop or workstation and to make it ssh into the NiHook server. If you want to run the NiHook-UI container on the NiHook server, start from `.env.example-container-localhost` and copy it to `.env`. In this case you need to use ssh, too, to connect from inside the NiHook-UI container to the host.
+
 
 ### 2. Prepare the Database Directory
 The database is using SQLite. To avoid data loss when your container stops/starts, create an `instance/` folder on your host machine to store the `.db` file locally safely:
@@ -154,10 +157,13 @@ podman run -d \
   -v /home/YOUR_LOCAL_USER/.ssh/your_key:/app/.ssh/id_rsa:ro,z \
   -v $(pwd)/instance:/app/instance:Z \
   --env-file .env \
-  -p 5000:5000 \
+  -p 9000:9000 \
   nihook-ui
 ```
-*Note: Due to IPv6 setups on modern machines, navigate to `http://127.0.0.1:5000` instead of `localhost:5000` to access the UI.*
+
+* If NiHook-UI runs on you local laptop/workstation navigate to `http://127.0.0.1:9000` to access the UI. Don't use `localhost:5000` due to IPv6 setups on modern machines.
+* If NiHook is running on the NiHook server, then you should use an ssh tunnel to connect. Run `ssh -L9000:localhost:9000 <nihook-server` and then navigate to `http://127.0.0.1:9000`.
+
 
 ## API Endpoints
 
