@@ -16,6 +16,9 @@ RESUME_SCRIPT = Config.RESUME_SCRIPT
 
 def get_ssh_client():
     """Create and return an SSH client"""
+    if not USE_SSH:
+        logger.info("SSH is disabled via configuration; get_ssh_client will return None.")
+        return None
     jump_hosts = SSH_CONFIG.get("jump_hosts", [])
     jump_users = SSH_CONFIG.get("jump_users", [])
     jump_ports = SSH_CONFIG.get("jump_ports", [])
