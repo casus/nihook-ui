@@ -111,6 +111,8 @@ if __name__ == "__main__":
     form_data["gitlab_repo_url"] = args.gitlab_repo_url
     form_data["gitlab_api_token"] = args.gitlab_api_token
     form_data["gitlab_project_token"] = args.gitlab_project_token
+    if form_data.get("gitlab_project_token") == None:
+        form_data["gitlab_project_token"] = ""
     # User requested server_ip to be webhook_host
     form_data["server_ip"] = details.get("webhook_host")
     form_data["webhook_username"] = details.get("webhook_user")

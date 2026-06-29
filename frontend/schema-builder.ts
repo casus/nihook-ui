@@ -860,10 +860,10 @@ async function handleCreateTableSubmit(e: Event): Promise<void> {
             alert('Please enter GitLab API Token');
             return;
         }
-        if (!gitlabProjectToken) {
-            alert('Please enter GitLab Project Token');
-            return;
-        }
+        // if (!gitlabProjectToken) {
+        //     alert('Please enter GitLab Project Token');
+        //     return;
+        // }
     }
     
     const submitBtn = document.getElementById('confirm-create-table-btn') as HTMLButtonElement;
